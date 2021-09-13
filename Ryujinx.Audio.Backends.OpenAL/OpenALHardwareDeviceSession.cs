@@ -71,11 +71,11 @@ namespace Ryujinx.Audio.Backends.OpenAL
                 OpenALAudioBuffer driverBuffer = new OpenALAudioBuffer
                 {
                     DriverIdentifier = buffer.DataPointer,
-                    BufferId         = AL.GenBuffer(),
-                    SampleCount      = GetSampleCount(buffer)
+                    BufferId = AL.GenBuffer(),
+                    SampleCount = GetSampleCount(buffer)
                 };
 
-                AL.BufferData(driverBuffer.BufferId, _targetFormat, buffer.Data, (int)buffer.DataSize, (int)RequestedSampleRate);
+                AL.BufferData(driverBuffer.BufferId, _targetFormat, buffer.Data, (int)RequestedSampleRate);
 
                 _queuedBuffers.Enqueue(driverBuffer);
 
@@ -125,7 +125,7 @@ namespace Ryujinx.Audio.Backends.OpenAL
             }
         }
 
-        public override void UnregisterBuffer(AudioBuffer buffer) {}
+        public override void UnregisterBuffer(AudioBuffer buffer) { }
 
         public override bool WasBufferFullyConsumed(AudioBuffer buffer)
         {
@@ -190,7 +190,7 @@ namespace Ryujinx.Audio.Backends.OpenAL
 
         protected virtual void Dispose(bool disposing)
         {
-            if (disposing)
+            if (disposing && _driver.Unregister(this))
             {
                 lock (_lock)
                 {
@@ -198,8 +198,6 @@ namespace Ryujinx.Audio.Backends.OpenAL
                     Stop();
 
                     AL.DeleteSource(_sourceId);
-
-                    _driver.Unregister(this);
                 }
             }
         }

@@ -1,24 +1,24 @@
 using LibHac;
+using LibHac.Sf;
 using Ryujinx.HLE.HOS.Ipc;
-using System;
 
 namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
 {
-    class IStorage : IpcService, IDisposable
+    class IStorage : DisposableIpcService
     {
-        private LibHac.Fs.IStorage _baseStorage;
+        private ReferenceCountedDisposable<LibHac.FsSrv.Sf.IStorage> _baseStorage;
 
-        public IStorage(LibHac.Fs.IStorage baseStorage)
+        public IStorage(ReferenceCountedDisposable<LibHac.FsSrv.Sf.IStorage> baseStorage)
         {
             _baseStorage = baseStorage;
         }
 
-        [Command(0)]
+        [CommandHipc(0)]
         // Read(u64 offset, u64 length) -> buffer<u8, 0x46, 0> buffer
         public ResultCode Read(ServiceCtx context)
         {
-            long offset = context.RequestData.ReadInt64();
-            long size   = context.RequestData.ReadInt64();
+            ulong offset = context.RequestData.ReadUInt64();
+            ulong size   = context.RequestData.ReadUInt64();
 
             if (context.Request.ReceiveBuff.Count > 0)
             {
@@ -32,9 +32,9 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
 
                 byte[] data = new byte[size];
 
-                Result result = _baseStorage.Read(offset, data);
+                Result result = _baseStorage.Target.Read((long)offset, new OutBuffer(data), (long)size);
 
-                context.Memory.Write((ulong)buffDesc.Position, data);
+                context.Memory.Write(buffDesc.Position, data);
 
                 return (ResultCode)result.Value;
             }
@@ -42,25 +42,20 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             return ResultCode.Success;
         }
 
-        [Command(4)]
+        [CommandHipc(4)]
         // GetSize() -> u64 size
         public ResultCode GetSize(ServiceCtx context)
         {
-            Result result = _baseStorage.GetSize(out long size);
+            Result result = _baseStorage.Target.GetSize(out long size);
 
             context.ResponseData.Write(size);
 
             return (ResultCode)result.Value;
         }
 
-        public void Dispose()
+        protected override void Dispose(bool isDisposing)
         {
-            Dispose(true);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
+            if (isDisposing)
             {
                 _baseStorage?.Dispose();
             }

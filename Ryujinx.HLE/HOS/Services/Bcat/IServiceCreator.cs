@@ -11,14 +11,15 @@ namespace Ryujinx.HLE.HOS.Services.Bcat
     [Service("bcat:s", "bcat:s")]
     class IServiceCreator : IpcService
     {
-        private LibHac.Bcat.Detail.Ipc.IServiceCreator _base;
+        private LibHac.Bcat.Impl.Ipc.IServiceCreator _base;
 
         public IServiceCreator(ServiceCtx context, string serviceName)
         {
-            context.Device.System.LibHacHorizonClient.Sm.GetService(out _base, serviceName).ThrowIfFailure();
+            var applicationClient = context.Device.System.LibHacHorizonManager.ApplicationClient;
+            applicationClient.Sm.GetService(out _base, serviceName).ThrowIfFailure();
         }
 
-        [Command(0)]
+        [CommandHipc(0)]
         // CreateBcatService(pid) -> object<nn::bcat::detail::ipc::IBcatService>
         public ResultCode CreateBcatService(ServiceCtx context)
         {
@@ -36,13 +37,13 @@ namespace Ryujinx.HLE.HOS.Services.Bcat
             return ResultCode.Success;
         }
 
-        [Command(1)]
+        [CommandHipc(1)]
         // CreateDeliveryCacheStorageService(pid) -> object<nn::bcat::detail::ipc::IDeliveryCacheStorageService>
         public ResultCode CreateDeliveryCacheStorageService(ServiceCtx context)
         {
             ulong pid = context.RequestData.ReadUInt64();
 
-            Result rc = _base.CreateDeliveryCacheStorageService(out LibHac.Bcat.Detail.Ipc.IDeliveryCacheStorageService serv, pid);
+            Result rc = _base.CreateDeliveryCacheStorageService(out LibHac.Bcat.Impl.Ipc.IDeliveryCacheStorageService serv, pid);
 
             if (rc.IsSuccess())
             {
@@ -52,13 +53,13 @@ namespace Ryujinx.HLE.HOS.Services.Bcat
             return (ResultCode)rc.Value;
         }
 
-        [Command(2)]
+        [CommandHipc(2)]
         // CreateDeliveryCacheStorageServiceWithApplicationId(nn::ApplicationId) -> object<nn::bcat::detail::ipc::IDeliveryCacheStorageService>
         public ResultCode CreateDeliveryCacheStorageServiceWithApplicationId(ServiceCtx context)
         {
             ApplicationId applicationId = context.RequestData.ReadStruct<ApplicationId>();
 
-            Result rc = _base.CreateDeliveryCacheStorageServiceWithApplicationId(out LibHac.Bcat.Detail.Ipc.IDeliveryCacheStorageService serv,
+            Result rc = _base.CreateDeliveryCacheStorageServiceWithApplicationId(out LibHac.Bcat.Impl.Ipc.IDeliveryCacheStorageService serv,
                applicationId);
 
             if (rc.IsSuccess())

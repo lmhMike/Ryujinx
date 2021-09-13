@@ -3,46 +3,54 @@ using LibHac.FsSrv;
 
 namespace Ryujinx.HLE.HOS.Services.Fs
 {
-    class IDeviceOperator : IpcService
+    class IDeviceOperator : DisposableIpcService
     {
-        private LibHac.FsSrv.IDeviceOperator _baseOperator;
+        private ReferenceCountedDisposable<LibHac.FsSrv.Sf.IDeviceOperator> _baseOperator;
 
-        public IDeviceOperator(LibHac.FsSrv.IDeviceOperator baseOperator)
+        public IDeviceOperator(ReferenceCountedDisposable<LibHac.FsSrv.Sf.IDeviceOperator> baseOperator)
         {
             _baseOperator = baseOperator;
         }
 
-        [Command(0)]
+        [CommandHipc(0)]
         // IsSdCardInserted() -> b8 is_inserted
         public ResultCode IsSdCardInserted(ServiceCtx context)
         {
-            Result result = _baseOperator.IsSdCardInserted(out bool isInserted);
+            Result result = _baseOperator.Target.IsSdCardInserted(out bool isInserted);
 
             context.ResponseData.Write(isInserted);
 
             return (ResultCode)result.Value;
         }
 
-        [Command(200)]
+        [CommandHipc(200)]
         // IsGameCardInserted() -> b8 is_inserted
         public ResultCode IsGameCardInserted(ServiceCtx context)
         {
-            Result result = _baseOperator.IsGameCardInserted(out bool isInserted);
+            Result result = _baseOperator.Target.IsGameCardInserted(out bool isInserted);
 
             context.ResponseData.Write(isInserted);
 
             return (ResultCode)result.Value;
         }
 
-        [Command(202)]
+        [CommandHipc(202)]
         // GetGameCardHandle() -> u32 gamecard_handle
         public ResultCode GetGameCardHandle(ServiceCtx context)
         {
-            Result result = _baseOperator.GetGameCardHandle(out GameCardHandle handle);
+            Result result = _baseOperator.Target.GetGameCardHandle(out GameCardHandle handle);
 
             context.ResponseData.Write(handle.Value);
 
             return (ResultCode)result.Value;
+        }
+
+        protected override void Dispose(bool isDisposing)
+        {
+            if (isDisposing)
+            {
+                _baseOperator?.Dispose();
+            }
         }
     }
 }

@@ -118,7 +118,7 @@ namespace Ryujinx.Modules
             catch (Exception exception)
             {
                 Logger.Error?.Print(LogClass.Application, exception.Message);
-                GtkDialog.CreateErrorDialog("An error has occurred when trying to get release information from AppVeyor.");
+                GtkDialog.CreateErrorDialog("An error occurred when trying to get release information from AppVeyor. This can be caused if a new release is being compiled by AppVeyor. Try again in a few minutes.");
 
                 return;
             }
@@ -162,7 +162,7 @@ namespace Ryujinx.Modules
                 catch (Exception ex)
                 {
                     Logger.Warning?.Print(LogClass.Application, ex.Message);
-                    Logger.Warning?.Print(LogClass.Application, "Couldn't determine build size for update, will use single-threaded updater");
+                    Logger.Warning?.Print(LogClass.Application, "Couldn't determine build size for update, using single-threaded updater");
 
                     _buildSize = -1;
                 }
@@ -486,16 +486,6 @@ namespace Ryujinx.Modules
                 if (showWarnings)
                 {
                     GtkDialog.CreateWarningDialog("You are not connected to the Internet!", "Please verify that you have a working Internet connection!");
-                }
-
-                return false;
-            }
-
-            if (AppDataManager.Mode == AppDataManager.LaunchMode.Portable)
-            {
-                if (showWarnings)
-                {
-                    GtkDialog.CreateWarningDialog("You cannot update a portable version of Ryujinx!", "Please use a non-portable configuration to enable updates.");
                 }
 
                 return false;

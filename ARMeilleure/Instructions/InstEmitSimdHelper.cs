@@ -7,7 +7,7 @@ using System.Diagnostics;
 using System.Reflection;
 
 using static ARMeilleure.Instructions.InstEmitHelper;
-using static ARMeilleure.IntermediateRepresentation.OperandHelper;
+using static ARMeilleure.IntermediateRepresentation.Operand.Factory;
 
 namespace ARMeilleure.Instructions
 {
@@ -188,6 +188,15 @@ namespace ARMeilleure.Instructions
         public static Operand X86GetAllElements(ArmEmitterContext context, double value)
         {
             return X86GetAllElements(context, BitConverter.DoubleToInt64Bits(value));
+        }
+
+        public static Operand X86GetAllElements(ArmEmitterContext context, short value)
+        {
+            ulong value1 = (ushort)value;
+            ulong value2 = value1 << 16 | value1;
+            ulong value4 = value2 << 32 | value2;
+
+            return X86GetAllElements(context, (long)value4);
         }
 
         public static Operand X86GetAllElements(ArmEmitterContext context, int value)
@@ -1270,9 +1279,11 @@ namespace ARMeilleure.Instructions
             context.MarkLabel(lblTrue);
         }
 
-        public static void EmitSseOrAvxExitFtzAndDazModesOpF(ArmEmitterContext context, Operand isTrue = null)
+        public static void EmitSseOrAvxExitFtzAndDazModesOpF(ArmEmitterContext context, Operand isTrue = default)
         {
-            isTrue ??= context.Call(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetFpcrFz)));
+            isTrue = isTrue == default 
+                ? context.Call(typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetFpcrFz)))
+                : isTrue;
 
             Operand lblTrue = Label();
             context.BranchIfFalse(lblTrue, isTrue);
@@ -1302,32 +1313,29 @@ namespace ARMeilleure.Instructions
         [Flags]
         public enum SaturatingFlags
         {
-            Scalar = 1 << 0,
-            Signed = 1 << 1,
+            None = 0,
 
-            Add = 1 << 2,
-            Sub = 1 << 3,
+            ByElem = 1 << 0,
+            Scalar = 1 << 1,
+            Signed = 1 << 2,
 
-            Accumulate = 1 << 4,
+            Add = 1 << 3,
+            Sub = 1 << 4,
 
-            ScalarSx = Scalar | Signed,
-            ScalarZx = Scalar,
-
-            VectorSx = Signed,
-            VectorZx = 0
+            Accumulate = 1 << 5
         }
 
         public static void EmitScalarSaturatingUnaryOpSx(ArmEmitterContext context, Func1I emit)
         {
-            EmitSaturatingUnaryOpSx(context, emit, SaturatingFlags.ScalarSx);
+            EmitSaturatingUnaryOpSx(context, emit, SaturatingFlags.Scalar | SaturatingFlags.Signed);
         }
 
         public static void EmitVectorSaturatingUnaryOpSx(ArmEmitterContext context, Func1I emit)
         {
-            EmitSaturatingUnaryOpSx(context, emit, SaturatingFlags.VectorSx);
+            EmitSaturatingUnaryOpSx(context, emit, SaturatingFlags.Signed);
         }
 
-        private static void EmitSaturatingUnaryOpSx(ArmEmitterContext context, Func1I emit, SaturatingFlags flags)
+        public static void EmitSaturatingUnaryOpSx(ArmEmitterContext context, Func1I emit, SaturatingFlags flags)
         {
             OpCodeSimd op = (OpCodeSimd)context.CurrOp;
 
@@ -1357,24 +1365,29 @@ namespace ARMeilleure.Instructions
             context.Copy(GetVec(op.Rd), res);
         }
 
-        public static void EmitScalarSaturatingBinaryOpSx(ArmEmitterContext context, SaturatingFlags flags)
+        public static void EmitScalarSaturatingBinaryOpSx(ArmEmitterContext context, Func2I emit = null, SaturatingFlags flags = SaturatingFlags.None)
         {
-            EmitSaturatingBinaryOp(context, null, SaturatingFlags.ScalarSx | flags);
+            EmitSaturatingBinaryOp(context, emit, SaturatingFlags.Scalar | SaturatingFlags.Signed | flags);
         }
 
         public static void EmitScalarSaturatingBinaryOpZx(ArmEmitterContext context, SaturatingFlags flags)
         {
-            EmitSaturatingBinaryOp(context, null, SaturatingFlags.ScalarZx | flags);
+            EmitSaturatingBinaryOp(context, null, SaturatingFlags.Scalar | flags);
         }
 
-        public static void EmitVectorSaturatingBinaryOpSx(ArmEmitterContext context, SaturatingFlags flags)
+        public static void EmitVectorSaturatingBinaryOpSx(ArmEmitterContext context, Func2I emit = null, SaturatingFlags flags = SaturatingFlags.None)
         {
-            EmitSaturatingBinaryOp(context, null, SaturatingFlags.VectorSx | flags);
+            EmitSaturatingBinaryOp(context, emit, SaturatingFlags.Signed | flags);
         }
 
         public static void EmitVectorSaturatingBinaryOpZx(ArmEmitterContext context, SaturatingFlags flags)
         {
-            EmitSaturatingBinaryOp(context, null, SaturatingFlags.VectorZx | flags);
+            EmitSaturatingBinaryOp(context, null, flags);
+        }
+
+        public static void EmitVectorSaturatingBinaryOpByElemSx(ArmEmitterContext context, Func2I emit)
+        {
+            EmitSaturatingBinaryOp(context, emit, SaturatingFlags.ByElem | SaturatingFlags.Signed);
         }
 
         public static void EmitSaturatingBinaryOp(ArmEmitterContext context, Func2I emit, SaturatingFlags flags)
@@ -1383,6 +1396,7 @@ namespace ARMeilleure.Instructions
 
             Operand res = context.VectorZero();
 
+            bool byElem = (flags & SaturatingFlags.ByElem) != 0;
             bool scalar = (flags & SaturatingFlags.Scalar) != 0;
             bool signed = (flags & SaturatingFlags.Signed) != 0;
 
@@ -1395,13 +1409,11 @@ namespace ARMeilleure.Instructions
 
             if (add || sub)
             {
-                OpCodeSimdReg opReg = (OpCodeSimdReg)op;
-
                 for (int index = 0; index < elems; index++)
                 {
                     Operand de;
-                    Operand ne = EmitVectorExtract(context, opReg.Rn, index, op.Size, signed);
-                    Operand me = EmitVectorExtract(context, opReg.Rm, index, op.Size, signed);
+                    Operand ne = EmitVectorExtract(context, op.Rn, index, op.Size, signed);
+                    Operand me = EmitVectorExtract(context, ((OpCodeSimdReg)op).Rm, index, op.Size, signed);
 
                     if (op.Size <= 2)
                     {
@@ -1445,12 +1457,23 @@ namespace ARMeilleure.Instructions
             }
             else
             {
-                OpCodeSimdReg opReg = (OpCodeSimdReg)op;
+                Operand me = default;
+
+                if (byElem)
+                {
+                    OpCodeSimdRegElem opRegElem = (OpCodeSimdRegElem)op;
+
+                    me = EmitVectorExtract(context, opRegElem.Rm, opRegElem.Index, op.Size, signed);
+                }
 
                 for (int index = 0; index < elems; index++)
                 {
-                    Operand ne = EmitVectorExtract(context, opReg.Rn, index, op.Size, signed);
-                    Operand me = EmitVectorExtract(context, opReg.Rm, index, op.Size, signed);
+                    Operand ne = EmitVectorExtract(context, op.Rn, index, op.Size, signed);
+
+                    if (!byElem)
+                    {
+                        me = EmitVectorExtract(context, ((OpCodeSimdReg)op).Rm, index, op.Size, signed);
+                    }
 
                     Operand de = EmitSatQ(context, emit(ne, me), op.Size, true, signed);
 
@@ -1604,7 +1627,7 @@ namespace ARMeilleure.Instructions
         {
             ThrowIfInvalid(index, size);
 
-            Operand res = null;
+            Operand res = default;
 
             switch (size)
             {

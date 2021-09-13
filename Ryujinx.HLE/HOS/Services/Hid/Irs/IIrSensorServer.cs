@@ -1,4 +1,4 @@
-﻿using Ryujinx.Common.Logging;
+using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Ipc;
 using Ryujinx.HLE.HOS.Kernel.Common;
 using Ryujinx.HLE.HOS.Services.Hid.HidServer;
@@ -13,7 +13,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Irs
 
         public IIrSensorServer(ServiceCtx context) { }
 
-        [Command(302)]
+        [CommandHipc(302)]
         // ActivateIrsensor(nn::applet::AppletResourceUserId, pid)
         public ResultCode ActivateIrsensor(ServiceCtx context)
         {
@@ -24,7 +24,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Irs
             return ResultCode.Success;
         }
 
-        [Command(303)]
+        [CommandHipc(303)]
         // DeactivateIrsensor(nn::applet::AppletResourceUserId, pid)
         public ResultCode DeactivateIrsensor(ServiceCtx context)
         {
@@ -35,7 +35,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Irs
             return ResultCode.Success;
         }
 
-        [Command(304)]
+        [CommandHipc(304)]
         // GetIrsensorSharedMemoryHandle(nn::applet::AppletResourceUserId, pid) -> handle<copy>
         public ResultCode GetIrsensorSharedMemoryHandle(ServiceCtx context)
         {
@@ -52,7 +52,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Irs
             return ResultCode.Success;
         }
 
-        [Command(311)]
+        [CommandHipc(311)]
         // GetNpadIrCameraHandle(u32) -> nn::irsensor::IrCameraHandle
         public ResultCode GetNpadIrCameraHandle(ServiceCtx context)
         {
@@ -75,7 +75,21 @@ namespace Ryujinx.HLE.HOS.Services.Hid.Irs
             return ResultCode.Success;
         }
 
-        [Command(319)] // 4.0.0+
+        [CommandHipc(314)] // 3.0.0+
+        // CheckFirmwareVersion(nn::irsensor::IrCameraHandle, nn::irsensor::PackedMcuVersion, nn::applet::AppletResourceUserId, pid)
+        public ResultCode CheckFirmwareVersion(ServiceCtx context)
+        {
+            int   irCameraHandle        = context.RequestData.ReadInt32();
+            short packedMcuVersionMajor = context.RequestData.ReadInt16();
+            short packedMcuVersionMinor = context.RequestData.ReadInt16();
+            long  appletResourceUserId  = context.RequestData.ReadInt64();
+
+            Logger.Stub?.PrintStub(LogClass.ServiceIrs, new { appletResourceUserId, irCameraHandle, packedMcuVersionMajor, packedMcuVersionMinor });
+
+            return ResultCode.Success;
+        }
+
+        [CommandHipc(319)] // 4.0.0+
         // ActivateIrsensorWithFunctionLevel(nn::applet::AppletResourceUserId, nn::irsensor::PackedFunctionLevel, pid)
         public ResultCode ActivateIrsensorWithFunctionLevel(ServiceCtx context)
         {

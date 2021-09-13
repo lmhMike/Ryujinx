@@ -8,7 +8,7 @@ using System;
 
 namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.LibraryAppletCreator
 {
-    class ILibraryAppletAccessor : IpcService, IDisposable
+    class ILibraryAppletAccessor : DisposableIpcService
     {
         private KernelContext _kernelContext;
 
@@ -60,7 +60,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             _interactiveOutDataEvent.WritableEvent.Signal();
         }
 
-        [Command(0)]
+        [CommandHipc(0)]
         // GetAppletStateChangedEvent() -> handle<copy>
         public ResultCode GetAppletStateChangedEvent(ServiceCtx context)
         {
@@ -77,21 +77,33 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        [Command(10)]
+        [CommandHipc(10)]
         // Start()
         public ResultCode Start(ServiceCtx context)
         {
             return (ResultCode)_applet.Start(_normalSession.GetConsumer(), _interactiveSession.GetConsumer());
         }
 
-        [Command(30)]
+        [CommandHipc(20)]
+        // RequestExit()
+        public ResultCode RequestExit(ServiceCtx context)
+        {
+            // TODO: Since we don't support software Applet for now, we can just signals the changed state of the applet.
+            _stateChangedEvent.ReadableEvent.Signal();
+
+            Logger.Stub?.PrintStub(LogClass.ServiceAm);
+
+            return ResultCode.Success;
+        }
+
+        [CommandHipc(30)]
         // GetResult()
         public ResultCode GetResult(ServiceCtx context)
         {
             return (ResultCode)_applet.GetResult();
         }
 
-        [Command(60)]
+        [CommandHipc(60)]
         // PresetLibraryAppletGpuTimeSliceZero()
         public ResultCode PresetLibraryAppletGpuTimeSliceZero(ServiceCtx context)
         {
@@ -104,7 +116,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        [Command(100)]
+        [CommandHipc(100)]
         // PushInData(object<nn::am::service::IStorage>)
         public ResultCode PushInData(ServiceCtx context)
         {
@@ -115,7 +127,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        [Command(101)]
+        [CommandHipc(101)]
         // PopOutData() -> object<nn::am::service::IStorage>
         public ResultCode PopOutData(ServiceCtx context)
         {
@@ -131,7 +143,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.NotAvailable;
         }
 
-        [Command(103)]
+        [CommandHipc(103)]
         // PushInteractiveInData(object<nn::am::service::IStorage>)
         public ResultCode PushInteractiveInData(ServiceCtx context)
         {
@@ -142,7 +154,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        [Command(104)]
+        [CommandHipc(104)]
         // PopInteractiveOutData() -> object<nn::am::service::IStorage>
         public ResultCode PopInteractiveOutData(ServiceCtx context)
         {
@@ -158,7 +170,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.NotAvailable;
         }
 
-        [Command(105)]
+        [CommandHipc(105)]
         // GetPopOutDataEvent() -> handle<copy>
         public ResultCode GetPopOutDataEvent(ServiceCtx context)
         {
@@ -175,7 +187,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        [Command(106)]
+        [CommandHipc(106)]
         // GetPopInteractiveOutDataEvent() -> handle<copy>
         public ResultCode GetPopInteractiveOutDataEvent(ServiceCtx context)
         {
@@ -192,21 +204,21 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        [Command(110)]
+        [CommandHipc(110)]
         // NeedsToExitProcess()
         public ResultCode NeedsToExitProcess(ServiceCtx context)
         {
             return ResultCode.Stubbed;
         }
 
-        [Command(150)]
+        [CommandHipc(150)]
         // RequestForAppletToGetForeground()
         public ResultCode RequestForAppletToGetForeground(ServiceCtx context)
         {
             return ResultCode.Stubbed;
         }
 
-        [Command(160)] // 2.0.0+
+        [CommandHipc(160)] // 2.0.0+
         // GetIndirectLayerConsumerHandle() -> u64 indirect_layer_consumer_handle
         public ResultCode GetIndirectLayerConsumerHandle(ServiceCtx context)
         {
@@ -229,21 +241,24 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
 
-        public void Dispose()
+        protected override void Dispose(bool isDisposing)
         {
-            if (_stateChangedEventHandle != 0)
+            if (isDisposing)
             {
-                _kernelContext.Syscall.CloseHandle(_stateChangedEventHandle);
-            }
+                if (_stateChangedEventHandle != 0)
+                {
+                    _kernelContext.Syscall.CloseHandle(_stateChangedEventHandle);
+                }
 
-            if (_normalOutDataEventHandle != 0)
-            {
-                _kernelContext.Syscall.CloseHandle(_normalOutDataEventHandle);
-            }
+                if (_normalOutDataEventHandle != 0)
+                {
+                    _kernelContext.Syscall.CloseHandle(_normalOutDataEventHandle);
+                }
 
-            if (_interactiveOutDataEventHandle != 0)
-            {
-                _kernelContext.Syscall.CloseHandle(_interactiveOutDataEventHandle);
+                if (_interactiveOutDataEventHandle != 0)
+                {
+                    _kernelContext.Syscall.CloseHandle(_interactiveOutDataEventHandle);
+                }
             }
         }
     }

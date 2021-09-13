@@ -12,9 +12,13 @@ namespace Ryujinx.Graphics.Shader.Translation
         None = 0,
 
         // Affected by resolution scaling.
-        FragCoordXY     = 1 << 1,
         IntegerSampling = 1 << 0,
+        FragCoordXY     = 1 << 1,
 
-        Bindless        = 1 << 2,
+        Bindless = 1 << 2,
+        InstanceId = 1 << 3,
+        CbIndexing = 1 << 4,
+        IaIndexing = 1 << 5,
+        OaIndexing = 1 << 6
     }
 }

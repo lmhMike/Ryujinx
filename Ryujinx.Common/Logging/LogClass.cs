@@ -5,9 +5,11 @@ namespace Ryujinx.Common.Logging
         Application,
         Audio,
         AudioRenderer,
+        Configuration,
         Cpu,
         Font,
         Emulation,
+        FFmpeg,
         Gpu,
         Hid,
         Host1x,
@@ -35,7 +37,9 @@ namespace Ryujinx.Common.Logging
         ServiceLdn,
         ServiceLdr,
         ServiceLm,
+        ServiceMii,
         ServiceMm,
+        ServiceNfc,
         ServiceNfp,
         ServiceNgct,
         ServiceNifm,
@@ -57,6 +61,7 @@ namespace Ryujinx.Common.Logging
         ServiceTime,
         ServiceVi,
         SurfaceFlinger,
+        TamperMachine,
         Vic
     }
 }

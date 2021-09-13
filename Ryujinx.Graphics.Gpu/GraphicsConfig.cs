@@ -13,7 +13,7 @@ namespace Ryujinx.Graphics.Gpu
         /// <summary>
         /// Max Anisotropy. Values range from 0 - 16. Set to -1 to let the game decide.
         /// </summary>
-        public static float MaxAnisotropy;
+        public static float MaxAnisotropy = -1;
 
         /// <summary>
         /// Base directory used to write shader code dumps.
@@ -32,6 +32,11 @@ namespace Ryujinx.Graphics.Gpu
         /// Enables or disables the Just-in-Time compiler for GPU Macro code.
         /// </summary>
         public static bool EnableMacroJit = true;
+
+        /// <summary>
+        /// Enables or disables high-level emulation of common GPU Macro code.
+        /// </summary>
+        public static bool EnableMacroHLE = true;
 
         /// <summary>
         /// Title id of the current running game.

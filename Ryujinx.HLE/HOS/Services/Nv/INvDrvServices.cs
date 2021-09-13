@@ -3,7 +3,6 @@ using Ryujinx.Common.Logging;
 using Ryujinx.Cpu;
 using Ryujinx.HLE.Exceptions;
 using Ryujinx.HLE.HOS.Ipc;
-using Ryujinx.HLE.HOS.Kernel.Memory;
 using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices;
 using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostAsGpu;
 using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel;
@@ -24,8 +23,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
     [Service("nvdrv:t")]
     class INvDrvServices : IpcService
     {
-        private static Dictionary<string, Type> _deviceFileRegistry =
-                   new Dictionary<string, Type>()
+        private static Dictionary<string, Type> _deviceFileRegistry = new Dictionary<string, Type>()
         {
             { "/dev/nvmap",           typeof(NvMapDeviceFile)         },
             { "/dev/nvhost-ctrl",     typeof(NvHostCtrlDeviceFile)    },
@@ -39,7 +37,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             //{ "/dev/nvhost-display",  typeof(NvHostChannelDeviceFile) },
         };
 
-        private static IdDictionary _deviceFileIdRegistry = new IdDictionary();
+        public static IdDictionary DeviceFileIdRegistry = new IdDictionary();
 
         private IVirtualMemoryManager _clientMemory;
         private long _owner;
@@ -61,7 +59,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                 deviceFile.Path = path;
 
-                return _deviceFileIdRegistry.Add(deviceFile);
+                return DeviceFileIdRegistry.Add(deviceFile);
             }
             else
             {
@@ -73,8 +71,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
         private NvResult GetIoctlArgument(ServiceCtx context, NvIoctl ioctlCommand, out Span<byte> arguments)
         {
-            (long inputDataPosition,  long inputDataSize)  = context.Request.GetBufferType0x21(0);
-            (long outputDataPosition, long outputDataSize) = context.Request.GetBufferType0x22(0);
+            (ulong inputDataPosition,  ulong inputDataSize)  = context.Request.GetBufferType0x21(0);
+            (ulong outputDataPosition, ulong outputDataSize) = context.Request.GetBufferType0x22(0);
 
             NvIoctl.Direction ioctlDirection = ioctlCommand.DirectionValue;
             uint              ioctlSize      = ioctlCommand.Size;
@@ -106,7 +104,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                 byte[] temp = new byte[inputDataSize];
 
-                context.Memory.Read((ulong)inputDataPosition, temp);
+                context.Memory.Read(inputDataPosition, temp);
 
                 Buffer.BlockCopy(temp, 0, outputData, 0, temp.Length);
 
@@ -122,7 +120,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             {
                 byte[] temp = new byte[inputDataSize];
 
-                context.Memory.Read((ulong)inputDataPosition, temp);
+                context.Memory.Read(inputDataPosition, temp);
 
                 arguments = new Span<byte>(temp);
             }
@@ -139,7 +137,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 return NvResult.InvalidParameter;
             }
 
-            deviceFile = _deviceFileIdRegistry.GetData<NvDeviceFile>(fd);
+            deviceFile = DeviceFileIdRegistry.GetData<NvDeviceFile>(fd);
 
             if (deviceFile == null)
             {
@@ -217,7 +215,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             }
         }
 
-        [Command(0)]
+        [CommandHipc(0)]
         // Open(buffer<bytes, 5> path) -> (s32 fd, u32 error_code)
         public ResultCode Open(ServiceCtx context)
         {
@@ -226,10 +224,10 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
             if (errorCode == NvResult.Success)
             {
-                long pathPtr = context.Request.SendBuff[0].Position;
-                long pathSize = context.Request.SendBuff[0].Size;
+                ulong pathPtr = context.Request.SendBuff[0].Position;
+                ulong pathSize = context.Request.SendBuff[0].Size;
 
-                string path = MemoryHelper.ReadAsciiString(context.Memory, pathPtr, pathSize);
+                string path = MemoryHelper.ReadAsciiString(context.Memory, pathPtr, (long)pathSize);
 
                 fd = Open(context, path);
 
@@ -245,7 +243,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(1)]
+        [CommandHipc(1)]
         // Ioctl(s32 fd, u32 ioctl_cmd, buffer<bytes, 0x21> in_args) -> (u32 error_code, buffer<bytes, 0x22> out_args)
         public ResultCode Ioctl(ServiceCtx context)
         {
@@ -275,7 +273,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                         if ((ioctlCommand.DirectionValue & NvIoctl.Direction.Write) != 0)
                         {
-                            context.Memory.Write((ulong)context.Request.GetBufferType0x22(0).Position, arguments.ToArray());
+                            context.Memory.Write(context.Request.GetBufferType0x22(0).Position, arguments.ToArray());
                         }
                     }
                 }
@@ -286,7 +284,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(2)]
+        [CommandHipc(2)]
         // Close(s32 fd) -> u32 error_code
         public ResultCode Close(ServiceCtx context)
         {
@@ -302,7 +300,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 {
                     deviceFile.Close();
 
-                    _deviceFileIdRegistry.Delete(fd);
+                    DeviceFileIdRegistry.Delete(fd);
                 }
             }
 
@@ -311,12 +309,12 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(3)]
+        [CommandHipc(3)]
         // Initialize(u32 transfer_memory_size, handle<copy, process> current_process, handle<copy, transfer_memory> transfer_memory) -> u32 error_code
         public ResultCode Initialize(ServiceCtx context)
         {
             long transferMemSize   = context.RequestData.ReadInt64();
-            int  transferMemHandle = context.Request.HandleDesc.ToCopy[0];
+            int  transferMemHandle = context.Request.HandleDesc.ToCopy[1];
 
             // TODO: When transfer memory will be implemented, this could be removed.
             _transferMemInitialized = true;
@@ -329,13 +327,14 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
             context.ResponseData.Write((uint)NvResult.Success);
 
-            // Close transfer memory immediately as we don't use it.
+            // Close the process and transfer memory handles immediately as we don't use them.
+            context.Device.System.KernelContext.Syscall.CloseHandle(clientHandle);
             context.Device.System.KernelContext.Syscall.CloseHandle(transferMemHandle);
 
             return ResultCode.Success;
         }
 
-        [Command(4)]
+        [CommandHipc(4)]
         // QueryEvent(s32 fd, u32 event_id) -> (u32, handle<copy, event>)
         public ResultCode QueryEvent(ServiceCtx context)
         {
@@ -371,7 +370,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(5)]
+        [CommandHipc(5)]
         // MapSharedMemory(s32 fd, u32 argument, handle<copy, shared_memory>) -> u32 error_code
         public ResultCode MapSharedMemory(ServiceCtx context)
         {
@@ -396,7 +395,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(6)]
+        [CommandHipc(6)]
         // GetStatus() -> (unknown<0x20>, u32 error_code)
         public ResultCode GetStatus(ServiceCtx context)
         {
@@ -425,14 +424,14 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(7)]
+        [CommandHipc(7)]
         // ForceSetClientPid(u64) -> u32 error_code
         public ResultCode ForceSetClientPid(ServiceCtx context)
         {
             throw new ServiceNotImplementedException(this, context);
         }
 
-        [Command(8)]
+        [CommandHipc(8)]
         // SetClientPID(u64, pid) -> u32 error_code
         public ResultCode SetClientPid(ServiceCtx context)
         {
@@ -443,7 +442,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(9)]
+        [CommandHipc(9)]
         // DumpGraphicsMemoryInfo()
         public ResultCode DumpGraphicsMemoryInfo(ServiceCtx context)
         {
@@ -452,14 +451,14 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(10)] // 3.0.0+
+        [CommandHipc(10)] // 3.0.0+
         // InitializeDevtools(u32, handle<copy>) -> u32 error_code;
         public ResultCode InitializeDevtools(ServiceCtx context)
         {
             throw new ServiceNotImplementedException(this, context);
         }
 
-        [Command(11)] // 3.0.0+
+        [CommandHipc(11)] // 3.0.0+
         // Ioctl2(s32 fd, u32 ioctl_cmd, buffer<bytes, 0x21> in_args, buffer<bytes, 0x21> inline_in_buffer) -> (u32 error_code, buffer<bytes, 0x22> out_args)
         public ResultCode Ioctl2(ServiceCtx context)
         {
@@ -470,13 +469,13 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 int     fd           = context.RequestData.ReadInt32();
                 NvIoctl ioctlCommand = context.RequestData.ReadStruct<NvIoctl>();
 
-                (long inlineInBufferPosition, long inlineInBufferSize) = context.Request.GetBufferType0x21(1);
+                (ulong inlineInBufferPosition, ulong inlineInBufferSize) = context.Request.GetBufferType0x21(1);
 
                 errorCode = GetIoctlArgument(context, ioctlCommand, out Span<byte> arguments);
 
                 byte[] temp = new byte[inlineInBufferSize];
 
-                context.Memory.Read((ulong)inlineInBufferPosition, temp);
+                context.Memory.Read(inlineInBufferPosition, temp);
 
                 Span<byte> inlineInBuffer = new Span<byte>(temp);
 
@@ -497,7 +496,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                         if ((ioctlCommand.DirectionValue & NvIoctl.Direction.Write) != 0)
                         {
-                            context.Memory.Write((ulong)context.Request.GetBufferType0x22(0).Position, arguments.ToArray());
+                            context.Memory.Write(context.Request.GetBufferType0x22(0).Position, arguments.ToArray());
                         }
                     }
                 }
@@ -508,7 +507,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(12)] // 3.0.0+
+        [CommandHipc(12)] // 3.0.0+
         // Ioctl3(s32 fd, u32 ioctl_cmd, buffer<bytes, 0x21> in_args) -> (u32 error_code, buffer<bytes, 0x22> out_args,  buffer<bytes, 0x22> inline_out_buffer)
         public ResultCode Ioctl3(ServiceCtx context)
         {
@@ -519,13 +518,13 @@ namespace Ryujinx.HLE.HOS.Services.Nv
                 int     fd           = context.RequestData.ReadInt32();
                 NvIoctl ioctlCommand = context.RequestData.ReadStruct<NvIoctl>();
 
-                (long inlineOutBufferPosition, long inlineOutBufferSize) = context.Request.GetBufferType0x22(1);
+                (ulong inlineOutBufferPosition, ulong inlineOutBufferSize) = context.Request.GetBufferType0x22(1);
 
                 errorCode = GetIoctlArgument(context, ioctlCommand, out Span<byte> arguments);
 
                 byte[] temp = new byte[inlineOutBufferSize];
 
-                context.Memory.Read((ulong)inlineOutBufferPosition, temp);
+                context.Memory.Read(inlineOutBufferPosition, temp);
 
                 Span<byte> inlineOutBuffer = new Span<byte>(temp);
 
@@ -546,8 +545,8 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
                         if ((ioctlCommand.DirectionValue & NvIoctl.Direction.Write) != 0)
                         {
-                            context.Memory.Write((ulong)context.Request.GetBufferType0x22(0).Position, arguments.ToArray());
-                            context.Memory.Write((ulong)inlineOutBufferPosition, inlineOutBuffer.ToArray());
+                            context.Memory.Write(context.Request.GetBufferType0x22(0).Position, arguments.ToArray());
+                            context.Memory.Write(inlineOutBufferPosition, inlineOutBuffer.ToArray());
                         }
                     }
                 }
@@ -558,7 +557,7 @@ namespace Ryujinx.HLE.HOS.Services.Nv
             return ResultCode.Success;
         }
 
-        [Command(13)] // 3.0.0+
+        [CommandHipc(13)] // 3.0.0+
         // FinishInitialize(unknown<8>)
         public ResultCode FinishInitialize(ServiceCtx context)
         {
@@ -569,14 +568,16 @@ namespace Ryujinx.HLE.HOS.Services.Nv
 
         public static void Destroy()
         {
-            foreach (object entry in _deviceFileIdRegistry.Values)
+            NvHostChannelDeviceFile.Destroy();
+
+            foreach (object entry in DeviceFileIdRegistry.Values)
             {
                 NvDeviceFile deviceFile = (NvDeviceFile)entry;
 
                 deviceFile.Close();
             }
 
-            _deviceFileIdRegistry.Clear();
+            DeviceFileIdRegistry.Clear();
         }
     }
 }
