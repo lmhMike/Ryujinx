@@ -8,7 +8,7 @@ namespace Ryujinx.Cpu
 {
     class MemoryEhMeilleure : IDisposable
     {
-        private delegate bool TrackingEventDelegate(ulong address, ulong size, bool write);
+        private delegate bool TrackingEventDelegate(ulong address, ulong size, bool write, bool precise = false);
 
         private readonly MemoryBlock _addressSpace;
         private readonly MemoryTracking _tracking;
@@ -24,7 +24,7 @@ namespace Ryujinx.Cpu
             _baseAddress = (ulong)_addressSpace.Pointer;
             ulong endAddress = _baseAddress + addressSpace.Size;
 
-            _trackingEvent = new TrackingEventDelegate(tracking.VirtualMemoryEvent);
+            _trackingEvent = new TrackingEventDelegate(tracking.VirtualMemoryEventEh);
             bool added = NativeSignalHandler.AddTrackedRegion((nuint)_baseAddress, (nuint)endAddress, Marshal.GetFunctionPointerForDelegate(_trackingEvent));
 
             if (!added)

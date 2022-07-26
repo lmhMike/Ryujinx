@@ -76,7 +76,9 @@ namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
                                                     programInfo.Textures.Count,
                                                     programInfo.Images.Count,
                                                     programInfo.UsesInstanceId,
-                                                    programInfo.ClipDistancesWritten);
+                                                    programInfo.UsesRtLayer,
+                                                    programInfo.ClipDistancesWritten,
+                                                    programInfo.FragmentOutputMap);
             CBuffers = programInfo.CBuffers.ToArray();
             SBuffers = programInfo.SBuffers.ToArray();
             Textures = programInfo.Textures.ToArray();
@@ -89,7 +91,16 @@ namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
         /// <returns>A new <see cref="ShaderProgramInfo"/> from this instance</returns>
         internal ShaderProgramInfo ToShaderProgramInfo()
         {
-            return new ShaderProgramInfo(CBuffers, SBuffers, Textures, Images, Header.UsesInstanceId, Header.ClipDistancesWritten);
+            return new ShaderProgramInfo(
+                CBuffers,
+                SBuffers,
+                Textures,
+                Images,
+                default,
+                Header.UseFlags.HasFlag(UseFlags.InstanceId),
+                Header.UseFlags.HasFlag(UseFlags.RtLayer),
+                Header.ClipDistancesWritten,
+                Header.FragmentOutputMap);
         }
 
         /// <summary>
@@ -150,7 +161,7 @@ namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
         /// <param name="programCode">The host shader program</param>
         /// <param name="codeHolders">The shaders code holder</param>
         /// <returns>Raw data of a new host shader cache file</returns>
-        internal static byte[] Create(ReadOnlySpan<byte> programCode, ShaderCodeHolder[] codeHolders)
+        internal static byte[] Create(ReadOnlySpan<byte> programCode, CachedShaderStage[] codeHolders)
         {
             HostShaderCacheHeader header = new HostShaderCacheHeader((byte)codeHolders.Length, programCode.Length);
 

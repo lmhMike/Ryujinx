@@ -1,4 +1,3 @@
-using Ryujinx.Graphics.Shader;
 using System;
 
 namespace Ryujinx.Graphics.GAL
@@ -11,13 +10,14 @@ namespace Ryujinx.Graphics.GAL
 
         void ClearBuffer(BufferHandle destination, int offset, int size, uint value);
 
-        void ClearRenderTargetColor(int index, uint componentMask, ColorF color);
+        void ClearRenderTargetColor(int index, int layer, uint componentMask, ColorF color);
 
         void ClearRenderTargetDepthStencil(
+            int layer,
             float depthValue,
-            bool  depthMask,
-            int   stencilValue,
-            int   stencilMask);
+            bool depthMask,
+            int stencilValue,
+            int stencilMask);
 
         void CommandBufferBarrier();
 
@@ -32,6 +32,7 @@ namespace Ryujinx.Graphics.GAL
             int firstIndex,
             int firstVertex,
             int firstInstance);
+        void DrawTexture(ITexture texture, ISampler sampler, Extents2DF srcRegion, Extents2DF dstRegion);
 
         void EndTransformFeedback();
 
@@ -55,10 +56,16 @@ namespace Ryujinx.Graphics.GAL
 
         void SetImage(int binding, ITexture texture, Format imageFormat);
 
+        void SetLineParameters(float width, bool smooth);
+
         void SetLogicOpState(bool enable, LogicalOp op);
 
-        void SetLineParameters(float width, bool smooth);
+        void SetMultisampleState(MultisampleDescriptor multisample);
+
+        void SetPatchParameters(int vertices, ReadOnlySpan<float> defaultOuterLevel, ReadOnlySpan<float> defaultInnerLevel);
         void SetPointParameters(float size, bool isProgramPointSize, bool enablePointSprite, Origin origin);
+
+        void SetPolygonMode(PolygonMode frontMode, PolygonMode backMode);
 
         void SetPrimitiveRestart(bool enable, int index);
 
@@ -90,7 +97,7 @@ namespace Ryujinx.Graphics.GAL
         void SetVertexAttribs(ReadOnlySpan<VertexAttribDescriptor> vertexAttribs);
         void SetVertexBuffers(ReadOnlySpan<VertexBufferDescriptor> vertexBuffers);
 
-        void SetViewports(int first, ReadOnlySpan<Viewport> viewports);
+        void SetViewports(int first, ReadOnlySpan<Viewport> viewports, bool disableTransform);
 
         void TextureBarrier();
         void TextureBarrierTiled();
@@ -99,6 +106,6 @@ namespace Ryujinx.Graphics.GAL
         bool TryHostConditionalRendering(ICounterEvent value, ICounterEvent compare, bool isEqual);
         void EndHostConditionalRendering();
 
-        void UpdateRenderScale(ShaderStage stage, ReadOnlySpan<float> scales, int textureCount, int imageCount);
+        void UpdateRenderScale(ReadOnlySpan<float> scales, int totalCount, int fragmentCount);
     }
 }

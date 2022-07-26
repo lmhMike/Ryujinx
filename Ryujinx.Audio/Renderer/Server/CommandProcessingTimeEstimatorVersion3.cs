@@ -1,22 +1,4 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using Ryujinx.Audio.Common;
-using Ryujinx.Audio.Renderer.Common;
 using Ryujinx.Audio.Renderer.Dsp.Command;
 using Ryujinx.Audio.Renderer.Parameter.Effect;
 using System;
@@ -30,8 +12,8 @@ namespace Ryujinx.Audio.Renderer.Server
     /// </summary>
     public class CommandProcessingTimeEstimatorVersion3 : ICommandProcessingTimeEstimator
     {
-        private uint _sampleCount;
-        private uint _bufferCount;
+        protected uint _sampleCount;
+        protected uint _bufferCount;
 
         public CommandProcessingTimeEstimatorVersion3(uint sampleCount, uint bufferCount)
         {
@@ -199,7 +181,7 @@ namespace Ryujinx.Audio.Renderer.Server
             return (uint)1853.2f;
         }
 
-        public uint Estimate(DelayCommand command)
+        public virtual uint Estimate(DelayCommand command)
         {
             Debug.Assert(_sampleCount == 160 || _sampleCount == 240);
 
@@ -273,7 +255,7 @@ namespace Ryujinx.Audio.Renderer.Server
             }
         }
 
-        public uint Estimate(ReverbCommand command)
+        public virtual uint Estimate(ReverbCommand command)
         {
             Debug.Assert(_sampleCount == 160 || _sampleCount == 240);
 
@@ -347,7 +329,7 @@ namespace Ryujinx.Audio.Renderer.Server
             }
         }
 
-        public uint Estimate(Reverb3dCommand command)
+        public virtual uint Estimate(Reverb3dCommand command)
         {
             Debug.Assert(_sampleCount == 160 || _sampleCount == 240);
 
@@ -754,6 +736,16 @@ namespace Ryujinx.Audio.Renderer.Server
                 default:
                     throw new NotImplementedException($"{command.Parameter.ChannelCount}");
             }
+        }
+
+        public virtual uint Estimate(GroupedBiquadFilterCommand command)
+        {
+            return 0;
+        }
+
+        public virtual uint Estimate(CaptureBufferCommand command)
+        {
+            return 0;
         }
     }
 }

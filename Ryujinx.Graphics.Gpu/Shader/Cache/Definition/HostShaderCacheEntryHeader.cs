@@ -1,12 +1,32 @@
 ﻿using System.Runtime.InteropServices;
-using Ryujinx.Graphics.Shader;
 
 namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
 {
     /// <summary>
+    /// Flags indicating if the shader accesses certain built-ins, such as the instance ID.
+    /// </summary>
+    enum UseFlags : byte
+    {
+        /// <summary>
+        /// None of the built-ins are used.
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// Indicates whenever the vertex shader reads the gl_InstanceID built-in.
+        /// </summary>
+        InstanceId = 1 << 0,
+
+        /// <summary>
+        /// Indicates whenever any of the VTG stages writes to the gl_Layer built-in.
+        /// </summary>
+        RtLayer = 1 << 1
+    }
+
+    /// <summary>
     /// Host shader entry header used for binding information.
     /// </summary>
-    [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 0x14)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 0x18)]
     struct HostShaderCacheEntryHeader
     {
         /// <summary>
@@ -30,10 +50,9 @@ namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
         public int ImagesCount;
 
         /// <summary>
-        /// Set to true if the shader uses instance id.
+        /// Flags indicating if the shader accesses certain built-ins, such as the instance ID.
         /// </summary>
-        [MarshalAs(UnmanagedType.I1)]
-        public bool UsesInstanceId;
+        public UseFlags UseFlags;
 
         /// <summary>
         /// Set to true if this entry is in use.
@@ -52,6 +71,11 @@ namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
         public byte Reserved;
 
         /// <summary>
+        /// Mask of components written by the fragment shader stage.
+        /// </summary>
+        public int FragmentOutputMap;
+
+        /// <summary>
         /// Create a new host shader cache entry header.
         /// </summary>
         /// <param name="cBuffersCount">Count of constant buffer descriptors</param>
@@ -59,21 +83,32 @@ namespace Ryujinx.Graphics.Gpu.Shader.Cache.Definition
         /// <param name="texturesCount">Count of texture descriptors</param>
         /// <param name="imagesCount">Count of image descriptors</param>
         /// <param name="usesInstanceId">Set to true if the shader uses instance id</param>
+        /// <param name="clipDistancesWritten">Mask of clip distances that are written to on the shader</param>
+        /// <param name="fragmentOutputMap">Mask of components written by the fragment shader stage</param>
         public HostShaderCacheEntryHeader(
             int cBuffersCount,
             int sBuffersCount,
             int texturesCount,
             int imagesCount,
             bool usesInstanceId,
-            byte clipDistancesWritten) : this()
+            bool usesRtLayer,
+            byte clipDistancesWritten,
+            int fragmentOutputMap) : this()
         {
             CBuffersCount        = cBuffersCount;
             SBuffersCount        = sBuffersCount;
             TexturesCount        = texturesCount;
             ImagesCount          = imagesCount;
-            UsesInstanceId       = usesInstanceId;
             ClipDistancesWritten = clipDistancesWritten;
+            FragmentOutputMap    = fragmentOutputMap;
             InUse                = true;
+
+            UseFlags = usesInstanceId ? UseFlags.InstanceId : UseFlags.None;
+
+            if (usesRtLayer)
+            {
+                UseFlags |= UseFlags.RtLayer;
+            }
         }
     }
 }

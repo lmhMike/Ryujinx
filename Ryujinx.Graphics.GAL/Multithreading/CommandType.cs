@@ -3,7 +3,6 @@
     enum CommandType : byte
     {
         Action,
-        CompileShader,
         CreateBuffer,
         CreateProgram,
         CreateSampler,
@@ -29,13 +28,12 @@
 
         SamplerDispose,
 
-        ShaderDispose,
-
         TextureCopyTo,
         TextureCopyToScaled,
         TextureCopyToSlice,
         TextureCreateView,
         TextureGetData,
+        TextureGetDataSlice,
         TextureRelease,
         TextureSetData,
         TextureSetDataSlice,
@@ -53,6 +51,7 @@
         DispatchCompute,
         Draw,
         DrawIndexed,
+        DrawTexture,
         EndHostConditionalRendering,
         EndTransformFeedback,
         MultiDrawIndirectCount,
@@ -72,7 +71,10 @@
         SetIndexBuffer,
         SetLineParameters,
         SetLogicOpState,
+        SetMultisampleState,
+        SetPatchParameters,
         SetPointParameters,
+        SetPolygonMode,
         SetPrimitiveRestart,
         SetPrimitiveTopology,
         SetProgram,

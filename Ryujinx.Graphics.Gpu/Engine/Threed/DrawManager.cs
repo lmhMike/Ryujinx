@@ -1,5 +1,6 @@
 ﻿using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Gpu.Engine.Types;
+using System;
 using System.Text;
 
 namespace Ryujinx.Graphics.Gpu.Engine.Threed
@@ -13,9 +14,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         private readonly GpuChannel _channel;
         private readonly DeviceStateWithShadow<ThreedClassState> _state;
         private readonly DrawState _drawState;
+        private bool _topologySet;
 
         private bool _instancedDrawPending;
         private bool _instancedIndexed;
+        private bool _instancedIndexedInline;
 
         private int _instancedFirstIndex;
         private int _instancedFirstVertex;
@@ -41,6 +44,14 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             _channel = channel;
             _state = state;
             _drawState = drawState;
+        }
+
+        /// <summary>
+        /// Marks the entire state as dirty, forcing a full host state update before the next draw.
+        /// </summary>
+        public void ForceStateDirty()
+        {
+            _topologySet = false;
         }
 
         /// <summary>
@@ -124,13 +135,16 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             {
                 _instancedDrawPending = true;
 
+                int ibCount = _drawState.IbStreamer.InlineIndexCount;
+
                 _instancedIndexed = _drawState.DrawIndexed;
+                _instancedIndexedInline = ibCount != 0;
 
                 _instancedFirstIndex = firstIndex;
                 _instancedFirstVertex = (int)_state.State.FirstVertex;
                 _instancedFirstInstance = (int)_state.State.FirstInstance;
 
-                _instancedIndexCount = indexCount;
+                _instancedIndexCount = ibCount != 0 ? ibCount : indexCount;
 
                 var drawState = _state.State.VertexBufferDrawState;
 
@@ -224,11 +238,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                 _instanceIndex = 0;
             }
 
-            if (_drawState.Topology != topology)
+            if (_drawState.Topology != topology || !_topologySet)
             {
                 _context.Renderer.Pipeline.SetPrimitiveTopology(topology);
-
                 _drawState.Topology = topology;
+                _topologySet = true;
             }
         }
 
@@ -303,10 +317,70 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             bool oldDrawIndexed = _drawState.DrawIndexed;
 
             _drawState.DrawIndexed = true;
+            engine.ForceStateDirty(IndexBufferCountMethodOffset * 4);
 
             DrawEnd(engine, firstIndex, indexCount);
 
             _drawState.DrawIndexed = oldDrawIndexed;
+        }
+
+        /// <summary>
+        /// Performs a texture draw with a source texture and sampler ID, along with source
+        /// and destination coordinates and sizes.
+        /// </summary>
+        /// <param name="engine">3D engine where this method is being called</param>
+        /// <param name="argument">Method call argument</param>
+        public void DrawTexture(ThreedClass engine, int argument)
+        {
+            static float FixedToFloat(int fixedValue)
+            {
+                return fixedValue * (1f / 4096);
+            }
+
+            float dstX0 = FixedToFloat(_state.State.DrawTextureDstX);
+            float dstY0 = FixedToFloat(_state.State.DrawTextureDstY);
+            float dstWidth = FixedToFloat(_state.State.DrawTextureDstWidth);
+            float dstHeight = FixedToFloat(_state.State.DrawTextureDstHeight);
+
+            // TODO: Confirm behaviour on hardware.
+            // When this is active, the origin appears to be on the bottom.
+            if (_state.State.YControl.HasFlag(YControl.NegateY))
+            {
+                dstY0 -= dstHeight;
+            }
+
+            float dstX1 = dstX0 + dstWidth;
+            float dstY1 = dstY0 + dstHeight;
+
+            float srcX0 = FixedToFloat(_state.State.DrawTextureSrcX);
+            float srcY0 = FixedToFloat(_state.State.DrawTextureSrcY);
+            float srcX1 = ((float)_state.State.DrawTextureDuDx / (1UL << 32)) * dstWidth + srcX0;
+            float srcY1 = ((float)_state.State.DrawTextureDvDy / (1UL << 32)) * dstHeight + srcY0;
+
+            engine.UpdateState();
+
+            int textureId = _state.State.DrawTextureTextureId;
+            int samplerId = _state.State.DrawTextureSamplerId;
+
+            (var texture, var sampler) = _channel.TextureManager.GetGraphicsTextureAndSampler(textureId, samplerId);
+
+            srcX0 *= texture.ScaleFactor;
+            srcY0 *= texture.ScaleFactor;
+            srcX1 *= texture.ScaleFactor;
+            srcY1 *= texture.ScaleFactor;
+
+            float dstScale = _channel.TextureManager.RenderTargetScale;
+
+            dstX0 *= dstScale;
+            dstY0 *= dstScale;
+            dstX1 *= dstScale;
+            dstY1 *= dstScale;
+
+            _context.Renderer.Pipeline.DrawTexture(
+                texture?.HostTexture,
+                sampler?.GetHostSampler(texture),
+                new Extents2DF(srcX0, srcY0, srcX1, srcY1),
+                new Extents2DF(dstX0, dstY0, dstX1, dstY1));
         }
 
         /// <summary>
@@ -331,6 +405,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
 
             _context.Renderer.Pipeline.SetPrimitiveTopology(topology);
             _drawState.Topology = topology;
+            _topologySet = true;
 
             ConditionalRenderEnabled renderEnable = ConditionalRendering.GetRenderEnable(
                 _context,
@@ -380,8 +455,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             {
                 _instancedDrawPending = false;
 
-                if (_instancedIndexed)
+                bool indexedInline = _instancedIndexedInline;
+
+                if (_instancedIndexed || indexedInline)
                 {
+                    if (indexedInline)
+                    {
+                        int inlineIndexCount = _drawState.IbStreamer.GetAndResetInlineIndexCount();
+                        BufferRange br = new BufferRange(_drawState.IbStreamer.GetInlineIndexBuffer(), 0, inlineIndexCount * 4);
+
+                        _channel.BufferManager.SetIndexBuffer(br, IndexType.UInt);
+                    }
+
                     _context.Renderer.Pipeline.DrawIndexed(
                         _instancedIndexCount,
                         _instanceIndex + 1,
@@ -419,14 +504,72 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                 return;
             }
 
-            // Scissor and rasterizer discard also affect clears.
-            engine.UpdateState((1UL << StateUpdater.RasterizerStateIndex) | (1UL << StateUpdater.ScissorStateIndex));
-
             int index = (argument >> 6) & 0xf;
+            int layer = (argument >> 10) & 0x3ff;
 
-            engine.UpdateRenderTargetState(useControl: false, singleUse: index);
+            engine.UpdateRenderTargetState(useControl: false, layered: layer != 0, singleUse: index);
 
-            _channel.TextureManager.UpdateRenderTargets();
+            // If there is a mismatch on the host clip region and the one explicitly defined by the guest
+            // on the screen scissor state, then we need to force only one texture to be bound to avoid
+            // host clipping.
+            var screenScissorState = _state.State.ScreenScissorState;
+
+            // Must happen after UpdateRenderTargetState to have up-to-date clip region values.
+            bool clipMismatch = (screenScissorState.X | screenScissorState.Y) != 0 ||
+                                screenScissorState.Width != _channel.TextureManager.ClipRegionWidth ||
+                                screenScissorState.Height != _channel.TextureManager.ClipRegionHeight;
+
+            bool clearAffectedByStencilMask = (_state.State.ClearFlags & 1) != 0;
+            bool clearAffectedByScissor = (_state.State.ClearFlags & 0x100) != 0;
+            bool needsCustomScissor = !clearAffectedByScissor || clipMismatch;
+
+            // Scissor and rasterizer discard also affect clears.
+            ulong updateMask = 1UL << StateUpdater.RasterizerStateIndex;
+
+            if (!needsCustomScissor)
+            {
+                updateMask |= 1UL << StateUpdater.ScissorStateIndex;
+            }
+
+            engine.UpdateState(updateMask);
+
+            if (needsCustomScissor)
+            {
+                int scissorX = screenScissorState.X;
+                int scissorY = screenScissorState.Y;
+                int scissorW = screenScissorState.Width;
+                int scissorH = screenScissorState.Height;
+
+                if (clearAffectedByScissor && _state.State.ScissorState[0].Enable)
+                {
+                    ref var scissorState = ref _state.State.ScissorState[0];
+
+                    scissorX = Math.Max(scissorX, scissorState.X1);
+                    scissorY = Math.Max(scissorY, scissorState.Y1);
+                    scissorW = Math.Min(scissorW, scissorState.X2 - scissorState.X1);
+                    scissorH = Math.Min(scissorH, scissorState.Y2 - scissorState.Y1);
+                }
+
+                float scale = _channel.TextureManager.RenderTargetScale;
+                if (scale != 1f)
+                {
+                    scissorX = (int)(scissorX * scale);
+                    scissorY = (int)(scissorY * scale);
+                    scissorW = (int)MathF.Ceiling(scissorW * scale);
+                    scissorH = (int)MathF.Ceiling(scissorH * scale);
+                }
+
+                _context.Renderer.Pipeline.SetScissor(0, true, scissorX, scissorY, scissorW, scissorH);
+            }
+
+            if (clipMismatch)
+            {
+                _channel.TextureManager.UpdateRenderTarget(index);
+            }
+            else
+            {
+                _channel.TextureManager.UpdateRenderTargets();
+            }
 
             bool clearDepth = (argument & 1) != 0;
             bool clearStencil = (argument & 2) != 0;
@@ -439,7 +582,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
 
                 ColorF color = new ColorF(clearColor.Red, clearColor.Green, clearColor.Blue, clearColor.Alpha);
 
-                _context.Renderer.Pipeline.ClearRenderTargetColor(index, componentMask, color);
+                _context.Renderer.Pipeline.ClearRenderTargetColor(index, layer, componentMask, color);
             }
 
             if (clearDepth || clearStencil)
@@ -451,14 +594,25 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
 
                 if (clearStencil)
                 {
-                    stencilMask = _state.State.StencilTestState.FrontMask;
+                    stencilMask = clearAffectedByStencilMask ? _state.State.StencilTestState.FrontMask : 0xff;
+                }
+
+                if (clipMismatch)
+                {
+                    _channel.TextureManager.UpdateRenderTargetDepthStencil();
                 }
 
                 _context.Renderer.Pipeline.ClearRenderTargetDepthStencil(
+                    layer,
                     depthValue,
                     clearDepth,
                     stencilValue,
                     stencilMask);
+            }
+
+            if (needsCustomScissor)
+            {
+                engine.UpdateScissorState();
             }
 
             engine.UpdateRenderTargetState(useControl: true);

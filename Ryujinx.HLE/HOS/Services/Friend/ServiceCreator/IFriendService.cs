@@ -92,7 +92,7 @@ namespace Ryujinx.HLE.HOS.Services.Friend.ServiceCreator
             // Padding
             context.RequestData.ReadInt32();
 
-            UserId       userId   = context.RequestData.ReadStruct<UserId>();
+            UserId       userId = context.RequestData.ReadStruct<UserId>();
             FriendFilter filter = context.RequestData.ReadStruct<FriendFilter>();
 
             // Pid placeholder
@@ -116,6 +116,45 @@ namespace Ryujinx.HLE.HOS.Services.Friend.ServiceCreator
                 filter.IsArbitraryAppPlayedOnly,
                 filter.PresenceGroupId,
             });
+
+            return ResultCode.Success;
+        }
+
+        [CommandHipc(10120)] // 10.0.0+
+        // nn::friends::IsFriendListCacheAvailable(nn::account::Uid userId) -> bool
+        public ResultCode IsFriendListCacheAvailable(ServiceCtx context)
+        {
+            UserId userId = context.RequestData.ReadStruct<UserId>();
+
+            if (userId.IsNull)
+            {
+                return ResultCode.InvalidArgument;
+            }
+
+            // TODO: Service mount the friends:/ system savedata and try to load friend.cache file, returns true if exists, false otherwise. 
+            // NOTE: If no cache is available, guest then calls nn::friends::EnsureFriendListAvailable, we can avoid that by faking the cache check.
+            context.ResponseData.Write(true);
+
+            // TODO: Since we don't support friend features, it's fine to stub it for now.
+            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { UserId = userId.ToString() });
+
+            return ResultCode.Success;
+        }
+
+        [CommandHipc(10121)] // 10.0.0+
+        // nn::friends::EnsureFriendListAvailable(nn::account::Uid userId)
+        public ResultCode EnsureFriendListAvailable(ServiceCtx context)
+        {
+            UserId userId = context.RequestData.ReadStruct<UserId>();
+
+            if (userId.IsNull)
+            {
+                return ResultCode.InvalidArgument;
+            }
+
+            // TODO: Service mount the friends:/ system savedata and create a friend.cache file for the given user id.
+            //       Since we don't support friend features, it's fine to stub it for now.
+            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { UserId = userId.ToString() });
 
             return ResultCode.Success;
         }
@@ -217,7 +256,7 @@ namespace Ryujinx.HLE.HOS.Services.Friend.ServiceCreator
 
             context.Response.PtrBuff[0] = context.Response.PtrBuff[0].WithSize(0x40UL);
 
-            ulong bufferPosition  = context.Request.RecvListBuff[0].Position;
+            ulong bufferPosition = context.Request.RecvListBuff[0].Position;
 
             if (userId.IsNull)
             {
@@ -279,7 +318,7 @@ namespace Ryujinx.HLE.HOS.Services.Friend.ServiceCreator
 
             // Pid placeholder
             context.RequestData.ReadInt64();
-            long pid = context.Request.HandleDesc.PId;
+            ulong pid = context.Request.HandleDesc.PId;
 
             ulong playHistoryRegistrationKeyPosition = context.Request.PtrBuff[0].Position;
             ulong PlayHistoryRegistrationKeySize     = context.Request.PtrBuff[0].Size;

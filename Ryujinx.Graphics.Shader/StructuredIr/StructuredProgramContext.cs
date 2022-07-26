@@ -282,6 +282,12 @@ namespace Ryujinx.Graphics.Shader.StructuredIr
 
         public AstOperand GetOperandUse(Operand operand)
         {
+            // If this flag is set, we're reading from an output attribute instead.
+            if (operand.Type.IsAttribute() && (operand.Value & AttributeConsts.LoadOutputMask) != 0)
+            {
+                return GetOperandDef(operand);
+            }
+
             return GetOperand(operand);
         }
 
@@ -294,6 +300,11 @@ namespace Ryujinx.Graphics.Shader.StructuredIr
 
             if (operand.Type != OperandType.LocalVariable)
             {
+                if (operand.Type == OperandType.ConstantBuffer)
+                {
+                    Config.SetUsedConstantBuffer(operand.GetCbufSlot());
+                }
+
                 return new AstOperand(operand);
             }
 

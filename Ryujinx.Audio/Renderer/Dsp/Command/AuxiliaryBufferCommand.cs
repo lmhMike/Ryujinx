@@ -1,20 +1,3 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using Ryujinx.Audio.Renderer.Common;
 using Ryujinx.Memory;
 using System;
@@ -156,7 +139,7 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
                 Span<int> outputBufferInt = MemoryMarshal.Cast<float, int>(outputBuffer);
 
                 // Convert input data to the target format for user (int)
-                DataSourceHelper.ToInt(inputBufferInt, inputBuffer, outputBuffer.Length);
+                DataSourceHelper.ToInt(inputBufferInt, inputBuffer, inputBuffer.Length);
 
                 // Send the input to the user
                 Write(context.MemoryManager, OutputBuffer, CountMax, inputBufferInt, context.SampleCount, WriteOffset, UpdateCount);
@@ -177,8 +160,8 @@ namespace Ryujinx.Audio.Renderer.Dsp.Command
             }
             else
             {
-                context.MemoryManager.Fill(BufferInfo.SendBufferInfo, (ulong)Unsafe.SizeOf<AuxiliaryBufferInfo>(), 0);
-                context.MemoryManager.Fill(BufferInfo.ReturnBufferInfo, (ulong)Unsafe.SizeOf<AuxiliaryBufferInfo>(), 0);
+                AuxiliaryBufferInfo.Reset(context.MemoryManager, BufferInfo.SendBufferInfo);
+                AuxiliaryBufferInfo.Reset(context.MemoryManager, BufferInfo.ReturnBufferInfo);
 
                 if (InputBufferIndex != OutputBufferIndex)
                 {

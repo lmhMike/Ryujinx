@@ -15,6 +15,8 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
 
         private ulong _addOnContentBaseId;
 
+        private List<ulong> _mountedAocTitleIds = new List<ulong>();
+
         public IAddOnContentManager(ServiceCtx context)
         {
             _addOnContentListChangedEvent = new KEvent(context.Device.System.KernelContext);
@@ -42,7 +44,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
         // CountAddOnContent(pid) -> u32
         public ResultCode CountAddOnContent(ServiceCtx context)
         {
-            long pid = context.Request.HandleDesc.PId;
+            ulong pid = context.Request.HandleDesc.PId;
 
             // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
 
@@ -53,7 +55,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
         // ListAddOnContent(u32 start_index, u32 buffer_size, pid) -> (u32 count, buffer<u32>)
         public ResultCode ListAddOnContent(ServiceCtx context)
         {
-            long pid = context.Request.HandleDesc.PId;
+            ulong pid = context.Request.HandleDesc.PId;
 
             // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
 
@@ -73,7 +75,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
         // GetAddOnContentBaseId(pid) -> u64
         public ResultCode GetAddOnContentBaseId(ServiceCtx context)
         {
-            long pid = context.Request.HandleDesc.PId;
+            ulong pid = context.Request.HandleDesc.PId;
 
             // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
 
@@ -93,7 +95,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
         // PrepareAddOnContent(u32 index, pid)
         public ResultCode PrepareAddOnContent(ServiceCtx context)
         {
-            long pid = context.Request.HandleDesc.PId;
+            ulong pid = context.Request.HandleDesc.PId;
 
             // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
 
@@ -121,7 +123,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
         // GetAddOnContentListChangedEventWithProcessId(pid) -> handle<copy>
         public ResultCode GetAddOnContentListChangedEventWithProcessId(ServiceCtx context)
         {
-            long pid = context.Request.HandleDesc.PId;
+            ulong pid = context.Request.HandleDesc.PId;
 
             // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
 
@@ -134,6 +136,53 @@ namespace Ryujinx.HLE.HOS.Services.Ns.Aoc
             }
 
             return GetAddOnContentListChangedEventImpl(context);
+        }
+
+        [CommandHipc(11)] // 13.0.0+
+        // NotifyMountAddOnContent(pid, u64 title_id)
+        public ResultCode NotifyMountAddOnContent(ServiceCtx context)
+        {
+            ulong pid = context.Request.HandleDesc.PId;
+
+            // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
+
+            ulong aocTitleId = context.RequestData.ReadUInt64();
+
+            if (_mountedAocTitleIds.Count <= 0x7F)
+            {
+                _mountedAocTitleIds.Add(aocTitleId);
+            }
+
+            return ResultCode.Success;
+        }
+
+        [CommandHipc(12)] // 13.0.0+
+        // NotifyUnmountAddOnContent(pid, u64 title_id)
+        public ResultCode NotifyUnmountAddOnContent(ServiceCtx context)
+        {
+            ulong pid = context.Request.HandleDesc.PId;
+
+            // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
+
+            ulong aocTitleId = context.RequestData.ReadUInt64();
+
+            _mountedAocTitleIds.Remove(aocTitleId);
+
+            return ResultCode.Success;
+        }
+
+        [CommandHipc(50)] // 13.0.0+
+        // CheckAddOnContentMountStatus(pid)
+        public ResultCode CheckAddOnContentMountStatus(ServiceCtx context)
+        {
+            ulong pid = context.Request.HandleDesc.PId;
+
+            // NOTE: Service call arp:r GetApplicationLaunchProperty to get TitleId using the PId.
+            //       Then it does some internal checks and returns InvalidBufferSize if they fail.
+
+            Logger.Stub?.PrintStub(LogClass.ServiceNs);
+
+            return ResultCode.Success;
         }
 
         [CommandHipc(100)] // 7.0.0+

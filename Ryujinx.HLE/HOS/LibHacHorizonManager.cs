@@ -16,18 +16,19 @@ namespace Ryujinx.HLE.HOS
     public class LibHacHorizonManager
     {
         private LibHac.Horizon Server { get; set; }
-        public HorizonClient RyujinxClient { get; private set; }
 
+        public HorizonClient RyujinxClient     { get; private set; }
         public HorizonClient ApplicationClient { get; private set; }
+        public HorizonClient AccountClient     { get; private set; }
+        public HorizonClient AmClient          { get; private set; }
+        public HorizonClient BcatClient        { get; private set; }
+        public HorizonClient FsClient          { get; private set; }
+        public HorizonClient NsClient          { get; private set; }
+        public HorizonClient PmClient          { get; private set; }
+        public HorizonClient SdbClient         { get; private set; }
 
-        public HorizonClient AccountClient { get; private set; }
-        public HorizonClient AmClient { get; private set; }
-        public HorizonClient BcatClient { get; private set; }
-        public HorizonClient FsClient { get; private set; }
-        public HorizonClient NsClient { get; private set; }
-        public HorizonClient SdbClient { get; private set; }
-
-        internal LibHacIReader ArpIReader { get; private set; }
+        private SharedRef<LibHacIReader> _arpIReader;
+        internal LibHacIReader ArpIReader => _arpIReader.Get;
 
         public LibHacHorizonManager()
         {
@@ -43,14 +44,13 @@ namespace Ryujinx.HLE.HOS
 
         public void InitializeArpServer()
         {
-            ArpIReader = new LibHacIReader();
-            RyujinxClient.Sm.RegisterService(new LibHacArpServiceObject(ArpIReader), "arp:r").ThrowIfFailure();
+            _arpIReader.Reset(new LibHacIReader());
+            RyujinxClient.Sm.RegisterService(new LibHacArpServiceObject(ref _arpIReader), "arp:r").ThrowIfFailure();
         }
 
         public void InitializeBcatServer()
         {
-            BcatClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Bcat, StorageId.BuiltInSystem),
-                BcatFsPermissions);
+            BcatClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Bcat, StorageId.BuiltInSystem), BcatFsPermissions);
 
             _ = new BcatServer(BcatClient);
         }
@@ -66,23 +66,16 @@ namespace Ryujinx.HLE.HOS
 
         public void InitializeSystemClients()
         {
-            AccountClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Account, StorageId.BuiltInSystem),
-                AccountFsPermissions);
-
-            AmClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Am, StorageId.BuiltInSystem),
-                AmFsPermissions);
-
-            NsClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Ns, StorageId.BuiltInSystem),
-                NsFsPermissions);
-
-            SdbClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Sdb, StorageId.BuiltInSystem),
-                SdbFacData, SdbFacDescriptor);
+            PmClient      = Server.CreatePrivilegedHorizonClient();
+            AccountClient = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Account, StorageId.BuiltInSystem), AccountFsPermissions);
+            AmClient      = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Am,      StorageId.BuiltInSystem), AmFsPermissions);
+            NsClient      = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Ns,      StorageId.BuiltInSystem), NsFsPermissions);
+            SdbClient     = Server.CreateHorizonClient(new ProgramLocation(SystemProgramId.Sdb,     StorageId.BuiltInSystem), SdbFacData, SdbFacDescriptor);
         }
 
         public void InitializeApplicationClient(ProgramId programId, in Npdm npdm)
         {
-            ApplicationClient = Server.CreateHorizonClient(new ProgramLocation(programId, StorageId.BuiltInUser),
-                npdm.FsAccessControlData, npdm.FsAccessControlDescriptor);
+            ApplicationClient = Server.CreateHorizonClient(new ProgramLocation(programId, StorageId.BuiltInUser), npdm.FsAccessControlData, npdm.FsAccessControlDescriptor);
         }
 
         // This function was added to avoid errors that come from a user's keys or SD encryption seed changing.

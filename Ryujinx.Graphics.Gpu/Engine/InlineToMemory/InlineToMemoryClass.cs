@@ -99,9 +99,9 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
             _isLinear = (argument & 1) != 0;
 
             _offset = 0;
-            _size = (int)(state.LineLengthIn * state.LineCount);
+            _size = (int)(BitUtils.AlignUp(state.LineLengthIn, 4) * state.LineCount);
 
-            int count = BitUtils.DivRoundUp(_size, 4);
+            int count = _size / 4;
 
             if (_buffer == null || _buffer.Length < count)
             {
@@ -109,9 +109,6 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
             }
 
             ulong dstGpuVa = ((ulong)state.OffsetOutUpperValue << 32) | state.OffsetOut;
-
-            // Trigger read tracking, to flush any managed resources in the destination region.
-            _channel.MemoryManager.GetSpan(dstGpuVa, _size, true);
 
             _dstGpuVa = dstGpuVa;
             _dstX = state.SetDstOriginBytesXV;
@@ -174,7 +171,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
 
             if (_isLinear && _lineCount == 1)
             {
-                memoryManager.Write(_dstGpuVa, data);
+                memoryManager.WriteTrackedResource(_dstGpuVa, data.Slice(0, _lineLengthIn));
+                _context.AdvanceSequence();
             }
             else
             {
@@ -226,12 +224,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.InlineToMemory
 
                         memoryManager.Write(dstAddress, data[srcOffset]);
                     }
+
+                    // All lines must be aligned to 4 bytes, as the data is pushed one word at a time.
+                    // If our copy length is not a multiple of 4, then we need to skip the padding bytes here.
+                    int misalignment = _lineLengthIn & 3;
+
+                    if (misalignment != 0)
+                    {
+                        srcOffset += 4 - misalignment;
+                    }
                 }
+
+                _context.AdvanceSequence();
             }
 
             _finished = true;
-
-            _context.AdvanceSequence();
         }
     }
 }

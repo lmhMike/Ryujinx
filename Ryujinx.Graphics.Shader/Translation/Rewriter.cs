@@ -49,7 +49,8 @@ namespace Ryujinx.Graphics.Shader.Translation
             Operation operation = (Operation)node.Value;
 
             bool isAtomic = operation.Inst.IsAtomic();
-            bool isWrite = isAtomic || operation.Inst == Instruction.StoreGlobal;
+            bool isStg16Or8 = operation.Inst == Instruction.StoreGlobal16 || operation.Inst == Instruction.StoreGlobal8;
+            bool isWrite = isAtomic || operation.Inst == Instruction.StoreGlobal || isStg16Or8;
 
             Operation storageOp;
 
@@ -74,9 +75,9 @@ namespace Ryujinx.Graphics.Shader.Translation
 
                 int cbOffset = GetStorageCbOffset(config.Stage, slot);
 
-                Operand baseAddrLow  = config.CreateCbuf(0, cbOffset);
-                Operand baseAddrHigh = config.CreateCbuf(0, cbOffset + 1);
-                Operand size         = config.CreateCbuf(0, cbOffset + 2);
+                Operand baseAddrLow  = Cbuf(0, cbOffset);
+                Operand baseAddrHigh = Cbuf(0, cbOffset + 1);
+                Operand size         = Cbuf(0, cbOffset + 2);
 
                 Operand offset = PrependOperation(Instruction.Subtract,       addrLow, baseAddrLow);
                 Operand borrow = PrependOperation(Instruction.CompareLessU32, addrLow, baseAddrLow);
@@ -95,14 +96,21 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             Operand alignMask = Const(-config.GpuAccessor.QueryHostStorageBufferOffsetAlignment());
 
-            Operand baseAddrTrunc = PrependOperation(Instruction.BitwiseAnd,    sbBaseAddrLow, alignMask);
-            Operand byteOffset    = PrependOperation(Instruction.Subtract,      addrLow, baseAddrTrunc);
-            Operand wordOffset    = PrependOperation(Instruction.ShiftRightU32, byteOffset, Const(2));
+            Operand baseAddrTrunc = PrependOperation(Instruction.BitwiseAnd, sbBaseAddrLow, alignMask);
+            Operand byteOffset    = PrependOperation(Instruction.Subtract, addrLow, baseAddrTrunc);
 
             Operand[] sources = new Operand[operation.SourcesCount];
 
             sources[0] = sbSlot;
-            sources[1] = wordOffset;
+
+            if (isStg16Or8)
+            {
+                sources[1] = byteOffset;
+            }
+            else
+            {
+                sources[1] = PrependOperation(Instruction.ShiftRightU32, byteOffset, Const(2));
+            }
 
             for (int index = 2; index < operation.SourcesCount; index++)
             {
@@ -121,7 +129,14 @@ namespace Ryujinx.Graphics.Shader.Translation
             }
             else
             {
-                storageOp = new Operation(Instruction.StoreStorage, null, sources);
+                Instruction storeInst = operation.Inst switch
+                {
+                    Instruction.StoreGlobal16 => Instruction.StoreStorage16,
+                    Instruction.StoreGlobal8 => Instruction.StoreStorage8,
+                    _ => Instruction.StoreStorage
+                };
+
+                storageOp = new Operation(storeInst, null, sources);
             }
 
             for (int index = 0; index < operation.SourcesCount; index++)
@@ -149,9 +164,9 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             bool isBindless = (texOp.Flags & TextureFlags.Bindless) != 0;
 
-            bool isRect = !isBindless && config.GpuAccessor.QueryIsTextureRectangle(texOp.Handle, texOp.CbufSlot);
+            bool isCoordNormalized = isBindless || config.GpuAccessor.QueryTextureCoordNormalized(texOp.Handle, texOp.CbufSlot);
 
-            if (!(hasInvalidOffset || isRect))
+            if (!hasInvalidOffset && isCoordNormalized)
             {
                 return node;
             }
@@ -248,7 +263,7 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             hasInvalidOffset &= !areAllOffsetsConstant;
 
-            if (!(hasInvalidOffset || isRect))
+            if (!hasInvalidOffset && isCoordNormalized)
             {
                 return node;
             }
@@ -271,7 +286,7 @@ namespace Ryujinx.Graphics.Shader.Translation
             {
                 Operand res = Local();
 
-                node.List.AddBefore(node, new Operation(Instruction.ConvertFPToS32, res, value));
+                node.List.AddBefore(node, new Operation(Instruction.ConvertFP32ToS32, res, value));
 
                 return res;
             }
@@ -280,20 +295,22 @@ namespace Ryujinx.Graphics.Shader.Translation
             {
                 Operand res = Local();
 
-                node.List.AddBefore(node, new Operation(Instruction.ConvertS32ToFP, res, value));
+                node.List.AddBefore(node, new Operation(Instruction.ConvertS32ToFP32, res, value));
 
                 return res;
             }
 
-            // Emulate texture rectangle by normalizing the coordinates on the shader.
-            // When sampler*Rect is used, the coords are expected to the in the [0, W or H] range,
+            // Emulate non-normalized coordinates by normalizing the coordinates on the shader.
+            // Without normalization, the coordinates are expected to the in the [0, W or H] range,
             // and otherwise, it is expected to be in the [0, 1] range.
             // We normalize by dividing the coords by the texture size.
-            if (isRect && !intCoords)
+            if (!isCoordNormalized && !intCoords)
             {
                 config.SetUsedFeature(FeatureFlags.IntegerSampling);
 
-                for (int index = 0; index < coordsCount; index++)
+                int normCoordsCount = (texOp.Type & SamplerType.Mask) == SamplerType.TextureCube ? 2 : coordsCount;
+
+                for (int index = 0; index < normCoordsCount; index++)
                 {
                     Operand coordSize = Local();
 
@@ -486,7 +503,7 @@ namespace Ryujinx.Graphics.Shader.Translation
             // as replacement for SNORM (which is not supported).
             INode[] uses = texOp.Dest.UseOps.ToArray();
 
-            Operation convOp = new Operation(Instruction.ConvertS32ToFP, Local(), texOp.Dest);
+            Operation convOp = new Operation(Instruction.ConvertS32ToFP32, Local(), texOp.Dest);
             Operation normOp = new Operation(Instruction.FP32 | Instruction.Multiply, Local(), convOp.Dest, ConstF(1f / maxPositive));
 
             node = node.List.AddAfter(node, convOp);

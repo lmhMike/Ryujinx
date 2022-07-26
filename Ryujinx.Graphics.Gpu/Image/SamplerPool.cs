@@ -7,7 +7,7 @@ namespace Ryujinx.Graphics.Gpu.Image
     /// </summary>
     class SamplerPool : Pool<Sampler, SamplerDescriptor>
     {
-        private int _sequenceNumber;
+        private float _forcedAnisotropy;
 
         /// <summary>
         /// Constructs a new instance of the sampler pool.
@@ -16,7 +16,10 @@ namespace Ryujinx.Graphics.Gpu.Image
         /// <param name="physicalMemory">Physical memory where the sampler descriptors are mapped</param>
         /// <param name="address">Address of the sampler pool in guest memory</param>
         /// <param name="maximumId">Maximum sampler ID of the sampler pool (equal to maximum samplers minus one)</param>
-        public SamplerPool(GpuContext context, PhysicalMemory physicalMemory, ulong address, int maximumId) : base(context, physicalMemory, address, maximumId) { }
+        public SamplerPool(GpuContext context, PhysicalMemory physicalMemory, ulong address, int maximumId) : base(context, physicalMemory, address, maximumId)
+        {
+            _forcedAnisotropy = GraphicsConfig.MaxAnisotropy;
+        }
 
         /// <summary>
         /// Gets the sampler with the given ID.
@@ -30,9 +33,26 @@ namespace Ryujinx.Graphics.Gpu.Image
                 return null;
             }
 
-            if (_sequenceNumber != Context.SequenceNumber)
+            if (SequenceNumber != Context.SequenceNumber)
             {
-                _sequenceNumber = Context.SequenceNumber;
+                if (_forcedAnisotropy != GraphicsConfig.MaxAnisotropy)
+                {
+                    _forcedAnisotropy = GraphicsConfig.MaxAnisotropy;
+
+                    for (int i = 0; i < Items.Length; i++)
+                    {
+                        if (Items[i] != null)
+                        {
+                            Items[i].Dispose();
+
+                            Items[i] = null;
+                        }
+                    }
+
+                    UpdateModifiedSequence();
+                }
+
+                SequenceNumber = Context.SequenceNumber;
 
                 SynchronizeMemory();
             }
@@ -51,6 +71,39 @@ namespace Ryujinx.Graphics.Gpu.Image
             }
 
             return sampler;
+        }
+
+        /// <summary>
+        /// Checks if the pool was modified, and returns the last sequence number where a modification was detected.
+        /// </summary>
+        /// <returns>A number that increments each time a modification is detected</returns>
+        public int CheckModified()
+        {
+            if (SequenceNumber != Context.SequenceNumber)
+            {
+                SequenceNumber = Context.SequenceNumber;
+
+                if (_forcedAnisotropy != GraphicsConfig.MaxAnisotropy)
+                {
+                    _forcedAnisotropy = GraphicsConfig.MaxAnisotropy;
+
+                    for (int i = 0; i < Items.Length; i++)
+                    {
+                        if (Items[i] != null)
+                        {
+                            Items[i].Dispose();
+
+                            Items[i] = null;
+                        }
+                    }
+
+                    UpdateModifiedSequence();
+                }
+
+                SynchronizeMemory();
+            }
+
+            return ModifiedSequenceNumber;
         }
 
         /// <summary>

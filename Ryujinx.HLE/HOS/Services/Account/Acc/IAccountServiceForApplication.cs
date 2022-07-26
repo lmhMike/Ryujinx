@@ -81,6 +81,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
 
         [CommandHipc(100)]
         [CommandHipc(140)] // 6.0.0+
+        [CommandHipc(160)] // 13.0.0+
         // InitializeApplicationInfo(u64 pid_placeholder, pid)
         public ResultCode InitializeApplicationInfo(ServiceCtx context)
         {
@@ -168,7 +169,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
             // TODO: Account actually calls nn::arp::detail::IReader::GetApplicationControlProperty() with the current Pid and store the result (NACP file) internally.
             //       But since we use LibHac and we load one Application at a time, it's not necessary.
 
-            context.ResponseData.Write(context.Device.Application.ControlData.Value.UserAccountSwitchLock);
+            context.ResponseData.Write((byte)context.Device.Application.ControlData.Value.UserAccountSwitchLock);
 
             Logger.Stub?.PrintStub(LogClass.ServiceAcc);
 

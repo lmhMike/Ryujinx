@@ -2,9 +2,10 @@
 using LibHac.Fs;
 using LibHac.Fs.Fsa;
 using LibHac.FsSystem;
-using LibHac.FsSystem.NcaUtils;
+using LibHac.Ncm;
+using LibHac.Tools.FsSystem;
+using LibHac.Tools.FsSystem.NcaUtils;
 using Ryujinx.Common.Logging;
-using Ryujinx.HLE.FileSystem;
 using Ryujinx.HLE.HOS.Services.Am.AppletAE;
 using Ryujinx.HLE.HOS.SystemState;
 using System;
@@ -34,8 +35,7 @@ namespace Ryujinx.HLE.HOS.Applets.Error
             _horizon = horizon;
         }
 
-        public ResultCode Start(AppletSession normalSession,
-                                AppletSession interactiveSession)
+        public ResultCode Start(AppletSession normalSession, AppletSession interactiveSession)
         {
             _normalSession   = normalSession;
             _commonArguments = IApplet.ReadStruct<CommonArguments>(_normalSession.Pop());
@@ -94,31 +94,33 @@ namespace Ryujinx.HLE.HOS.Applets.Error
                 SystemLanguage.LatinAmericanSpanish => "es-419",
                 SystemLanguage.SimplifiedChinese    => "zh-Hans",
                 SystemLanguage.TraditionalChinese   => "zh-Hant",
+                SystemLanguage.BrazilianPortuguese  => "pt-BR",
                 _                                   => "en-US"
             };
         }
 
-        public string CleanText(string value)
+        private static string CleanText(string value)
         {
-            return Regex.Replace(Encoding.Unicode.GetString(Encoding.UTF8.GetBytes(value)), @"[^\u0009\u000A\u000D\u0020-\u007E]", "");
+            return Regex.Replace(value, @"[^\u0000\u0009\u000A\u000D\u0020-\uFFFF]..", "").Replace("\0", "");
         }
 
         private string GetMessageText(uint module, uint description, string key)
         {
-            string binaryTitleContentPath = _horizon.ContentManager.GetInstalledContentPath(ErrorMessageBinaryTitleId, StorageId.NandSystem, NcaContentType.Data);
+            string binaryTitleContentPath = _horizon.ContentManager.GetInstalledContentPath(ErrorMessageBinaryTitleId, StorageId.BuiltInSystem, NcaContentType.Data);
 
             using (LibHac.Fs.IStorage ncaFileStream = new LocalStorage(_horizon.Device.FileSystem.SwitchPathToSystemPath(binaryTitleContentPath), FileAccess.Read, FileMode.Open))
             {
                 Nca         nca          = new Nca(_horizon.Device.FileSystem.KeySet, ncaFileStream);
                 IFileSystem romfs        = nca.OpenFileSystem(NcaSectionType.Data, _horizon.FsIntegrityCheckLevel);
                 string      languageCode = SystemLanguageToLanguageKey(_horizon.State.DesiredSystemLanguage);
-                string      filePath     = "/" + Path.Combine(module.ToString(), $"{description:0000}", $"{languageCode}_{key}").Replace(@"\", "/");
+                string      filePath     = $"/{module}/{description:0000}/{languageCode}_{key}";
 
                 if (romfs.FileExists(filePath))
                 {
-                    romfs.OpenFile(out IFile binaryFile, filePath.ToU8Span(), OpenMode.Read).ThrowIfFailure();
+                    using var binaryFile = new UniqueRef<IFile>();
 
-                    StreamReader reader = new StreamReader(binaryFile.AsStream());
+                    romfs.OpenFile(ref binaryFile.Ref(), filePath.ToU8Span(), OpenMode.Read).ThrowIfFailure();
+                    StreamReader reader = new StreamReader(binaryFile.Get.AsStream(), Encoding.Unicode);
 
                     return CleanText(reader.ReadToEnd());
                 }
@@ -149,7 +151,7 @@ namespace Ryujinx.HLE.HOS.Applets.Error
             }
 
             string message = GetMessageText(module, description, "DlgMsg");
-        
+
             if (message == "")
             {
                 message = "An error has occured.\n\n"
@@ -176,11 +178,9 @@ namespace Ryujinx.HLE.HOS.Applets.Error
 
             byte[] messageTextBuffer = new byte[0x800];
             byte[] detailsTextBuffer = new byte[0x800];
-            unsafe
-            {
-                Marshal.Copy((IntPtr)applicationErrorArg.MessageText, messageTextBuffer, 0, 0x800);
-                Marshal.Copy((IntPtr)applicationErrorArg.DetailsText, detailsTextBuffer, 0, 0x800);
-            }
+
+            applicationErrorArg.MessageText.ToSpan().CopyTo(messageTextBuffer);
+            applicationErrorArg.DetailsText.ToSpan().CopyTo(detailsTextBuffer);
 
             string messageText = Encoding.ASCII.GetString(messageTextBuffer.TakeWhile(b => !b.Equals(0)).ToArray());
             string detailsText = Encoding.ASCII.GetString(detailsTextBuffer.TakeWhile(b => !b.Equals(0)).ToArray());

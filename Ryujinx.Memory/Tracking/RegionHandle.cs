@@ -37,6 +37,7 @@ namespace Ryujinx.Memory.Tracking
 
         private object _preActionLock = new object();
         private RegionSignal _preAction; // Action to perform before a read or write. This will block the memory access.
+        private PreciseRegionSignal _preciseAction; // Action to perform on a precise read or write.
         private readonly List<VirtualRegion> _regions;
         private readonly MemoryTracking _tracking;
         private bool _disposed;
@@ -113,7 +114,10 @@ namespace Ryujinx.Memory.Tracking
         /// <summary>
         /// Signal that a memory action occurred within this handle's virtual regions.
         /// </summary>
+        /// <param name="address">Address accessed</param>
+        /// <param name="size">Size of the region affected in bytes</param>
         /// <param name="write">Whether the region was written to or read</param>
+        /// <param name="handleIterable">Reference to the handles being iterated, in case the list needs to be copied</param>
         internal void Signal(ulong address, ulong size, bool write, ref IList<RegionHandle> handleIterable)
         {
             // If this handle was already unmapped (even if just partially),
@@ -142,7 +146,9 @@ namespace Ryujinx.Memory.Tracking
                     {
                         _preAction?.Invoke(address, size);
 
-                        _preAction = null;
+                        // The action is removed after it returns, to ensure that the null check above succeeds when
+                        // it's still in progress rather than continuing and possibly missing a required data flush.
+                        Interlocked.Exchange(ref _preAction, null);
                     }
                 }
                 finally
@@ -161,6 +167,27 @@ namespace Ryujinx.Memory.Tracking
                 }
                 Parent?.SignalWrite();
             }
+        }
+
+        /// <summary>
+        /// Signal that a precise memory action occurred within this handle's virtual regions.
+        /// If there is no precise action, or the action returns false, the normal signal handler will be called.
+        /// </summary>
+        /// <param name="address">Address accessed</param>
+        /// <param name="size">Size of the region affected in bytes</param>
+        /// <param name="write">Whether the region was written to or read</param>
+        /// <param name="handleIterable">Reference to the handles being iterated, in case the list needs to be copied</param>
+        /// <returns>True if a precise action was performed and returned true, false otherwise</returns>
+        internal bool SignalPrecise(ulong address, ulong size, bool write, ref IList<RegionHandle> handleIterable)
+        {
+            if (!Unmapped && _preciseAction != null && _preciseAction(address, size, write))
+            {
+                return true;
+            }
+
+            Signal(address, size, write, ref handleIterable);
+
+            return false;
         }
 
         /// <summary>
@@ -227,8 +254,7 @@ namespace Ryujinx.Memory.Tracking
 
             lock (_preActionLock)
             {
-                RegionSignal lastAction = _preAction;
-                _preAction = action;
+                RegionSignal lastAction = Interlocked.Exchange(ref _preAction, action);
 
                 if (lastAction == null && action != lastAction)
                 {
@@ -241,6 +267,16 @@ namespace Ryujinx.Memory.Tracking
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Register an action to perform when a precise access occurs (one with exact address and size).
+        /// If the action returns true, read/write tracking are skipped.
+        /// </summary>
+        /// <param name="action">Action to call on read or write</param>
+        public void RegisterPreciseAction(PreciseRegionSignal action)
+        {
+            _preciseAction = action;
         }
 
         /// <summary>

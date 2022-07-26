@@ -1,12 +1,11 @@
 using Gdk;
 using Gtk;
-using Mono.Unix;
 using Ryujinx.Ui;
+using Ryujinx.Ui.Common.Configuration;
 using System;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 namespace Ryujinx.Modules
 {
@@ -33,7 +32,7 @@ namespace Ryujinx.Modules
             _mainWindow = mainWindow;
             _buildUrl   = buildUrl;
 
-            Icon = new Gdk.Pixbuf(Assembly.GetExecutingAssembly(), "Ryujinx.Ui.Resources.Logo_Ryujinx.png");
+            Icon = new Gdk.Pixbuf(Assembly.GetAssembly(typeof(ConfigurationState)), "Ryujinx.Ui.Common.Resources.Logo_Ryujinx.png");
             MainText.Text      = "Do you want to update Ryujinx to the latest version?";
             SecondaryText.Text = $"{Program.Version} -> {newVersion}";
 
@@ -47,7 +46,7 @@ namespace Ryujinx.Modules
         {
             if (_restartQuery)
             {
-                string ryuName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Ryujinx.exe" : "Ryujinx";
+                string ryuName = OperatingSystem.IsWindows() ? "Ryujinx.exe" : "Ryujinx";
                 string ryuExe  = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ryuName);
                 string ryuArg  = string.Join(" ", Environment.GetCommandLineArgs().AsEnumerable().Skip(1).ToArray());
 

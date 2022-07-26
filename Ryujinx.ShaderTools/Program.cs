@@ -18,9 +18,9 @@ namespace Ryujinx.ShaderTools
                 _data = data;
             }
 
-            public T MemoryRead<T>(ulong address) where T : unmanaged
+            public ReadOnlySpan<ulong> GetCode(ulong address, int minimumSize)
             {
-                return MemoryMarshal.Cast<byte, T>(new ReadOnlySpan<byte>(_data).Slice((int)address))[0];
+                return MemoryMarshal.Cast<byte, ulong>(new ReadOnlySpan<byte>(_data).Slice((int)address));
             }
         }
 
@@ -55,7 +55,7 @@ namespace Ryujinx.ShaderTools
 
             TranslationOptions translationOptions = new TranslationOptions(options.TargetLanguage, options.TargetApi, flags);
 
-            ShaderProgram program = Translator.CreateContext(0, new GpuAccessor(data), translationOptions).Translate(out _);
+            ShaderProgram program = Translator.CreateContext(0, new GpuAccessor(data), translationOptions).Translate();
 
             if (options.OutputPath == null)
             {

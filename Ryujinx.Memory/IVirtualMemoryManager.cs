@@ -13,9 +13,9 @@ namespace Ryujinx.Memory
         /// Addresses and size must be page aligned.
         /// </remarks>
         /// <param name="va">Virtual memory address</param>
-        /// <param name="hostAddress">Pointer where the region should be mapped to</param>
+        /// <param name="pa">Physical memory address where the region should be mapped to</param>
         /// <param name="size">Size to be mapped</param>
-        void Map(ulong va, nuint hostAddress, ulong size);
+        void Map(ulong va, ulong pa, ulong size);
 
         /// <summary>
         /// Unmaps a previously mapped range of virtual memory.
@@ -68,7 +68,7 @@ namespace Ryujinx.Memory
 
                 using var writableRegion = GetWritableRegion(va + subOffset, copySize);
 
-                writableRegion.Memory.Span.Fill(0);
+                writableRegion.Memory.Span.Fill(value);
             }
         }
 
@@ -111,7 +111,7 @@ namespace Ryujinx.Memory
         /// <param name="va">Virtual address of the range</param>
         /// <param name="size">Size of the range</param>
         /// <returns>Array of physical regions</returns>
-        IEnumerable<HostMemoryRange> GetPhysicalRegions(ulong va, ulong size);
+        IEnumerable<MemoryRange> GetPhysicalRegions(ulong va, ulong size);
 
         /// <summary>
         /// Checks if the page at a given CPU virtual address is mapped.
@@ -135,7 +135,8 @@ namespace Ryujinx.Memory
         /// <param name="va">Virtual address of the region</param>
         /// <param name="size">Size of the region</param>
         /// <param name="write">True if the region was written, false if read</param>
-        void SignalMemoryTracking(ulong va, ulong size, bool write);
+        /// <param name="precise">True if the access is precise, false otherwise</param>
+        void SignalMemoryTracking(ulong va, ulong size, bool write, bool precise = false);
 
         /// <summary>
         /// Reprotect a region of virtual memory for tracking.

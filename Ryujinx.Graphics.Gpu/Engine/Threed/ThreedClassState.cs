@@ -3,6 +3,7 @@ using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Gpu.Engine.InlineToMemory;
 using Ryujinx.Graphics.Gpu.Engine.Types;
 using Ryujinx.Graphics.Gpu.Image;
+using Ryujinx.Graphics.Shader;
 using System;
 
 namespace Ryujinx.Graphics.Gpu.Engine.Threed
@@ -17,6 +18,43 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         TessellationEvaluation,
         Geometry,
         Fragment
+    }
+
+    /// <summary>
+    /// Tessellation mode.
+    /// </summary>
+    struct TessMode
+    {
+#pragma warning disable CS0649
+        public uint Packed;
+#pragma warning restore CS0649
+
+        /// <summary>
+        /// Unpacks the tessellation abstract patch type.
+        /// </summary>
+        /// <returns>Abtract patch type</returns>
+        public TessPatchType UnpackPatchType()
+        {
+            return (TessPatchType)(Packed & 3);
+        }
+
+        /// <summary>
+        /// Unpacks the spacing between tessellated vertices of the patch.
+        /// </summary>
+        /// <returns>Spacing between tessellated vertices</returns>
+        public TessSpacing UnpackSpacing()
+        {
+            return (TessSpacing)((Packed >> 4) & 3);
+        }
+
+        /// <summary>
+        /// Unpacks the primitive winding order.
+        /// </summary>
+        /// <returns>True if clockwise, false if counter-clockwise</returns>
+        public bool UnpackCw()
+        {
+            return (Packed & (1 << 8)) != 0;
+        }
     }
 
     /// <summary>
@@ -661,7 +699,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public Boolean32 EarlyZForce;
         public fixed uint Reserved214[45];
         public uint SyncpointAction;
-        public fixed uint Reserved2CC[44];
+        public fixed uint Reserved2CC[21];
+        public TessMode TessMode;
+        public Array4<float> TessOuterLevel;
+        public Array2<float> TessInnerLevel;
+        public fixed uint Reserved33C[16];
         public Boolean32 RasterizeEnable;
         public Array4<TfBufferState> TfBufferState;
         public fixed uint Reserved400[192];
@@ -679,11 +721,18 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public float ClearDepthValue;
         public fixed uint ReservedD94[3];
         public uint ClearStencilValue;
-        public fixed uint ReservedDA4[7];
+        public fixed uint ReservedDA4[2];
+        public PolygonMode PolygonModeFront;
+        public PolygonMode PolygonModeBack;
+        public Boolean32 PolygonSmoothEnable;
+        public fixed uint ReservedDB8[2];
         public DepthBiasState DepthBiasState;
-        public fixed uint ReservedDCC[5];
+        public int PatchVertices;
+        public fixed uint ReservedDD0[4];
         public uint TextureBarrier;
-        public fixed uint ReservedDE4[7];
+        public uint WatchdogTimer;
+        public Boolean32 PrimitiveRestartDrawArrays;
+        public fixed uint ReservedDEC[5];
         public Array16<ScissorState> ScissorState;
         public fixed uint ReservedF00[21];
         public StencilBackMasks StencilBackMasks;
@@ -696,7 +745,20 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public fixed uint ReservedF94[19];
         public RtDepthStencilState RtDepthStencilState;
         public ScreenScissorState ScreenScissorState;
-        public fixed uint ReservedFFC[89];
+        public fixed uint ReservedFFC[33];
+        public int DrawTextureDstX;
+        public int DrawTextureDstY;
+        public int DrawTextureDstWidth;
+        public int DrawTextureDstHeight;
+        public long DrawTextureDuDx;
+        public long DrawTextureDvDy;
+        public int DrawTextureSamplerId;
+        public int DrawTextureTextureId;
+        public int DrawTextureSrcX;
+        public int DrawTextureSrcY;
+        public fixed uint Reserved10B0[18];
+        public uint ClearFlags;
+        public fixed uint Reserved10FC[25];
         public Array16<VertexAttribState> VertexAttribState;
         public fixed uint Reserved11A0[31];
         public RtControl RtControl;
@@ -705,7 +767,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public SamplerIndex SamplerIndex;
         public fixed uint Reserved1238[37];
         public Boolean32 DepthTestEnable;
-        public fixed uint Reserved12D0[5];
+        public fixed uint Reserved12D0[4];
+        public Boolean32 AlphaToCoverageDitherEnable;
         public Boolean32 BlendIndependent;
         public Boolean32 DepthWriteEnable;
         public Boolean32 AlphaTestEnable;
@@ -726,7 +789,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public YControl YControl;
         public float LineWidthSmooth;
         public float LineWidthAliased;
-        public fixed uint Reserved13B8[31];
+        public fixed uint Reserved13B8[27];
+        public uint InvalidateSamplerCacheNoWfi;
+        public uint InvalidateTextureHeaderCacheNoWfi;
+        public fixed uint Reserved142C[2];
         public uint FirstVertex;
         public uint FirstInstance;
         public fixed uint Reserved143C[53];
@@ -737,9 +803,10 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         public Boolean32 PointSpriteEnable;
         public fixed uint Reserved1524[3];
         public uint ResetCounter;
-        public uint Reserved1534;
+        public Boolean32 MultisampleEnable;
         public Boolean32 RtDepthStencilEnable;
-        public fixed uint Reserved153C[5];
+        public uint MultisampleControl;
+        public fixed uint Reserved1540[4];
         public GpuVa RenderEnableAddress;
         public Condition RenderEnableCondition;
         public PoolState SamplerPoolState;

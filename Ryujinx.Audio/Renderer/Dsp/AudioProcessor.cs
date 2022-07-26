@@ -1,20 +1,3 @@
-//
-// Copyright (c) 2019-2021 Ryujinx
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-
 using Ryujinx.Audio.Integration;
 using Ryujinx.Audio.Renderer.Dsp.Command;
 using Ryujinx.Audio.Renderer.Utils;
@@ -78,7 +61,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
             }
         }
 
-        public void Start(IHardwareDeviceDriver deviceDriver)
+        public void Start(IHardwareDeviceDriver deviceDriver, float volume)
         {
             OutputDevices = new IHardwareDevice[Constants.AudioRendererSessionCountMax];
 
@@ -89,7 +72,7 @@ namespace Ryujinx.Audio.Renderer.Dsp
             for (int i = 0; i < OutputDevices.Length; i++)
             {
                 // TODO: Don't hardcode sample rate.
-                OutputDevices[i] = new HardwareDeviceImpl(deviceDriver, channelCount, Constants.TargetSampleRate);
+                OutputDevices[i] = new HardwareDeviceImpl(deviceDriver, channelCount, Constants.TargetSampleRate, volume);
             }
 
             _mailbox = new Mailbox<MailboxMessage>();
@@ -243,6 +226,33 @@ namespace Ryujinx.Audio.Renderer.Dsp
 
             Logger.Info?.Print(LogClass.AudioRenderer, "Stopping audio processor");
             _mailbox.SendResponse(MailboxMessage.Stop);
+        }
+
+        public float GetVolume()
+        {
+            if (OutputDevices != null)
+            {
+                foreach (IHardwareDevice outputDevice in OutputDevices)
+                {
+                    if (outputDevice != null)
+                    {
+                        return outputDevice.GetVolume();
+                    }
+                }
+            }
+
+            return 0f;
+        }
+
+        public void SetVolume(float volume)
+        {
+            if (OutputDevices != null)
+            {
+                foreach (IHardwareDevice outputDevice in OutputDevices)
+                {
+                    outputDevice?.SetVolume(volume);
+                }
+            }
         }
 
         public void Dispose()

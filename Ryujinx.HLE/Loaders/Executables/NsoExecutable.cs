@@ -1,7 +1,7 @@
-using LibHac.Common;
+using LibHac.Common.FixedArrays;
 using LibHac.Fs;
-using LibHac.FsSystem;
 using LibHac.Loader;
+using LibHac.Tools.FsSystem;
 using Ryujinx.Common.Logging;
 using System;
 using System.Text;
@@ -12,22 +12,22 @@ namespace Ryujinx.HLE.Loaders.Executables
     class NsoExecutable : IExecutable
     {
         public byte[] Program { get; }
-        public Span<byte> Text => Program.AsSpan().Slice((int)TextOffset, (int)TextSize);
-        public Span<byte> Ro   => Program.AsSpan().Slice((int)RoOffset,   (int)RoSize);
-        public Span<byte> Data => Program.AsSpan().Slice((int)DataOffset, (int)DataSize);
+        public Span<byte> Text => Program.AsSpan((int)TextOffset, (int)TextSize);
+        public Span<byte> Ro   => Program.AsSpan((int)RoOffset,   (int)RoSize);
+        public Span<byte> Data => Program.AsSpan((int)DataOffset, (int)DataSize);
 
         public uint TextOffset { get; }
-        public uint RoOffset { get; }
+        public uint RoOffset   { get; }
         public uint DataOffset { get; }
         public uint BssOffset => DataOffset + (uint)Data.Length;
 
         public uint TextSize { get; }
-        public uint RoSize { get; }
+        public uint RoSize   { get; }
         public uint DataSize { get; }
-        public uint BssSize { get; }
+        public uint BssSize  { get; }
 
-        public string   Name;
-        public Buffer32 BuildId;
+        public string        Name;
+        public Array32<byte> BuildId;
 
         public NsoExecutable(IStorage inStorage, string name = null)
         {
@@ -58,7 +58,7 @@ namespace Ryujinx.HLE.Loaders.Executables
         {
             reader.GetSegmentSize(segmentType, out uint uncompressedSize).ThrowIfFailure();
 
-            var span = Program.AsSpan().Slice((int)offset, (int)uncompressedSize);
+            var span = Program.AsSpan((int)offset, (int)uncompressedSize);
 
             reader.ReadSegment(segmentType, span).ThrowIfFailure();
 

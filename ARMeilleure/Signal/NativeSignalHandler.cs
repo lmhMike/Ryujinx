@@ -95,7 +95,7 @@ namespace ARMeilleure.Signal
             {
                 if (_initialized) return;
 
-                bool unix = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+                bool unix = OperatingSystem.IsLinux() || OperatingSystem.IsMacOS();
                 ref SignalHandlerConfig config = ref GetConfigRef();
 
                 if (unix)
@@ -103,7 +103,7 @@ namespace ARMeilleure.Signal
                     // Unix siginfo struct locations.
                     // NOTE: These are incredibly likely to be different between kernel version and architectures.
 
-                    config.StructAddressOffset = 16; // si_addr
+                    config.StructAddressOffset = OperatingSystem.IsMacOS() ? 24 : 16; // si_addr
                     config.StructWriteOffset = 8; // si_code
 
                     _signalHandlerPtr = Marshal.GetFunctionPointerForDelegate(GenerateUnixSignalHandler(_handlerConfig));
@@ -191,7 +191,7 @@ namespace ARMeilleure.Signal
                 // Is the fault address within this tracked region?
                 Operand inRange = context.BitwiseAnd(
                     context.ICompare(faultAddress, rangeAddress, Comparison.GreaterOrEqualUI),
-                    context.ICompare(faultAddress, rangeEndAddress, Comparison.Less)
+                    context.ICompare(faultAddress, rangeEndAddress, Comparison.LessUI)
                     );
 
                 // Only call tracking if in range.
@@ -202,7 +202,7 @@ namespace ARMeilleure.Signal
 
                 // Call the tracking action, with the pointer's relative offset to the base address.
                 Operand trackingActionPtr = context.Load(OperandType.I64, Const((ulong)signalStructPtr + rangeBaseOffset + 20));
-                context.Call(trackingActionPtr, OperandType.I32, offset, Const(PageSize), isWrite);
+                context.Call(trackingActionPtr, OperandType.I32, offset, Const(PageSize), isWrite, Const(0));
 
                 context.Branch(endLabel);
 
@@ -261,7 +261,7 @@ namespace ARMeilleure.Signal
 
             OperandType[] argTypes = new OperandType[] { OperandType.I32, OperandType.I64, OperandType.I64 };
 
-            return Compiler.Compile<UnixExceptionHandler>(cfg, argTypes, OperandType.None, CompilerOptions.HighCq);
+            return Compiler.Compile(cfg, argTypes, OperandType.None, CompilerOptions.HighCq).Map<UnixExceptionHandler>();
         }
 
         private static VectoredExceptionHandler GenerateWindowsSignalHandler(IntPtr signalStructPtr)
@@ -315,7 +315,7 @@ namespace ARMeilleure.Signal
 
             OperandType[] argTypes = new OperandType[] { OperandType.I64 };
 
-            return Compiler.Compile<VectoredExceptionHandler>(cfg, argTypes, OperandType.I32, CompilerOptions.HighCq);
+            return Compiler.Compile(cfg, argTypes, OperandType.I32, CompilerOptions.HighCq).Map<VectoredExceptionHandler>();
         }
     }
 }

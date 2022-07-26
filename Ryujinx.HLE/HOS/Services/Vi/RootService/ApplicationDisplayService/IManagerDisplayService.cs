@@ -11,6 +11,20 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
             _applicationDisplayService = applicationDisplayService;
         }
 
+        [CommandHipc(1102)]
+        // GetDisplayResolution(u64 display_id) -> (u64 width, u64 height)
+        public ResultCode GetDisplayResolution(ServiceCtx context)
+        {
+            ulong displayId = context.RequestData.ReadUInt64();
+
+            (ulong width, ulong height) = AndroidSurfaceComposerClient.GetDisplayInfo(context, displayId);
+
+            context.ResponseData.Write(width);
+            context.ResponseData.Write(height);
+
+            return ResultCode.Success;
+        }
+
         [CommandHipc(2010)]
         // CreateManagedLayer(u32, u64, nn::applet::AppletResourceUserId) -> u64
         public ResultCode CreateManagedLayer(ServiceCtx context)
@@ -19,9 +33,9 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
             long displayId            = context.RequestData.ReadInt64();
             long appletResourceUserId = context.RequestData.ReadInt64();
 
-            long pid = context.Device.System.AppletState.AppletResourceUserIds.GetData<long>((int)appletResourceUserId);
+            ulong pid = context.Device.System.AppletState.AppletResourceUserIds.GetData<ulong>((int)appletResourceUserId);
 
-            context.Device.System.SurfaceFlinger.CreateLayer(pid, out long layerId);
+            context.Device.System.SurfaceFlinger.CreateLayer(out long layerId, pid);
             context.Device.System.SurfaceFlinger.SetRenderLayer(layerId);
 
             context.ResponseData.Write(layerId);
@@ -35,9 +49,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         {
             long layerId = context.RequestData.ReadInt64();
 
-            context.Device.System.SurfaceFlinger.CloseLayer(layerId);
-
-            return ResultCode.Success;
+            return context.Device.System.SurfaceFlinger.DestroyManagedLayer(layerId);
         }
 
         [CommandHipc(2012)] // 7.0.0+
